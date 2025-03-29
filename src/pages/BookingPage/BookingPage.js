@@ -1,7 +1,9 @@
 // src/pages/BookingPage/BookingPage.js
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import { useFormContext } from '../../context/FormContext';
+import { useNavigation } from '../../context/NavigationContext';
 
 const BookingContainer = styled.div`
   max-width: 800px;
@@ -23,12 +25,15 @@ const BookingForm = styled.form`
   padding: 2rem;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: left;
 `;
 
 const FormGroup = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  width: 100%;
+  align-items: flex-start;
 `;
 
 const Label = styled.label`
@@ -41,6 +46,9 @@ const Input = styled.input`
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 `;
 
 const Select = styled.select`
@@ -48,6 +56,9 @@ const Select = styled.select`
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 `;
 
 const Textarea = styled.textarea`
@@ -55,7 +66,19 @@ const Textarea = styled.textarea`
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
-  min-height: 150px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 100px;
+  max-height: 100px;
+  resize: vertical;
+`;
+
+const TimezoneInfo = styled.div`
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 0.5rem;
+  width: 100%;
 `;
 
 const Button = styled.button`
@@ -68,14 +91,28 @@ const Button = styled.button`
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.3s;
+  align-self: flex-start; /* Left align the button */
 
   &:hover {
     background-color: #0051cc;
   }
 `;
 
+
 const BookingPage = () => {
   const navigate = useNavigate();
+  // Add fallback for local state in case context fails
+  const [localIsDirty, setLocalIsDirty] = useState(false);
+  
+  // Add error handling for context hooks
+  const formContext = useFormContext();
+  const navigationContext = useNavigation();
+  
+  // Safely destructure context values with fallbacks
+  const isDirty = formContext?.isDirty || localIsDirty;
+  const setIsDirty = formContext?.setIsDirty || setLocalIsDirty;
+  const setFormIsDirty = navigationContext?.setFormIsDirty || (() => {});
+  
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -83,20 +120,89 @@ const BookingPage = () => {
     time: '',
     topic: '',
     message: '',
+    sessionDuration: '30', // Default to 30 minutes
   });
+
+  // Handle browser tab close/refresh warnings
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isDirty || localIsDirty) {
+        const message = "You have unsaved changes. Are you sure you want to leave?";
+        e.preventDefault();
+        e.returnValue = message;
+        return message;
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty, localIsDirty]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
+    
+    // Set both context states safely
+    setLocalIsDirty(true);
+    
+    try {
+      if (setIsDirty) setIsDirty(true);
+      if (setFormIsDirty) setFormIsDirty(true);
+    } catch (err) {
+      console.error('Error updating form state:', err);
+    }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Here you would typically send the data to a backend
     console.log('Booking submitted:', formData);
-    // Navigate to thank you page
+    
+    // Reset both context states safely
+    setLocalIsDirty(false);
+    
+    try {
+      if (setIsDirty) setIsDirty(false);
+      if (setFormIsDirty) setFormIsDirty(false);
+    } catch (err) {
+      console.error('Error resetting form state:', err);
+    }
+    
     navigate('/thank-you');
   };
+
+  const generateTimeSlots = useMemo(() => {
+    if (!formData.date) return [];
+
+    const now = new Date();
+    const selectedDate = new Date(formData.date);
+    selectedDate.setHours(0, 0, 0, 0); // Normalize to midnight
+
+    const timeSlots = [];
+    let startTime = new Date(selectedDate);
+    startTime.setHours(9, 0, 0, 0); // Start at 9:00 AM IST
+
+    const endTime = new Date(selectedDate);
+    endTime.setHours(20, 0, 0, 0); // End at 8:00 PM IST
+
+    const duration = parseInt(formData.sessionDuration, 10); // Get duration in minutes
+
+    while (startTime <= endTime) {
+      const timeString = startTime.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      // Disable past times
+      if (selectedDate.toDateString() === now.toDateString() && startTime < now) {
+        timeSlots.push({ value: timeString, disabled: true });
+      } else {
+        timeSlots.push({ value: timeString, disabled: false });
+      }
+
+      startTime.setMinutes(startTime.getMinutes() + duration);
+    }
+    return timeSlots;
+  }, [formData.date, formData.sessionDuration]);
 
   return (
     <BookingContainer>
@@ -113,6 +219,7 @@ const BookingPage = () => {
             required
           />
         </FormGroup>
+        
         <FormGroup>
           <Label htmlFor="email">Email</Label>
           <Input
@@ -124,6 +231,7 @@ const BookingPage = () => {
             required
           />
         </FormGroup>
+        
         <FormGroup>
           <Label htmlFor="date">Preferred Date</Label>
           <Input
@@ -132,9 +240,28 @@ const BookingPage = () => {
             name="date"
             value={formData.date}
             onChange={handleChange}
+            min={new Date().toISOString().split('T')[0]}
             required
           />
+          <TimezoneInfo>
+            All times are in Indian Standard Time (IST) - UTC+5:30
+          </TimezoneInfo>
         </FormGroup>
+        
+        <FormGroup>
+          <Label htmlFor="sessionDuration">Session Duration</Label>
+          <Select
+            id="sessionDuration"
+            name="sessionDuration"
+            value={formData.sessionDuration}
+            onChange={handleChange}
+            required
+          >
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+          </Select>
+        </FormGroup>
+        
         <FormGroup>
           <Label htmlFor="time">Preferred Time</Label>
           <Select
@@ -143,17 +270,17 @@ const BookingPage = () => {
             value={formData.time}
             onChange={handleChange}
             required
+            disabled={!formData.date}
           >
             <option value="">Select a time slot</option>
-            <option value="9:00 AM">9:00 AM</option>
-            <option value="10:00 AM">10:00 AM</option>
-            <option value="11:00 AM">11:00 AM</option>
-            <option value="1:00 PM">1:00 PM</option>
-            <option value="2:00 PM">2:00 PM</option>
-            <option value="3:00 PM">3:00 PM</option>
-            <option value="4:00 PM">4:00 PM</option>
+            {generateTimeSlots.map((slot) => (
+              <option key={slot.value} value={slot.value} disabled={slot.disabled}>
+                {slot.value}
+              </option>
+            ))}
           </Select>
         </FormGroup>
+        
         <FormGroup>
           <Label htmlFor="topic">Topic</Label>
           <Select
@@ -172,6 +299,7 @@ const BookingPage = () => {
             <option value="Other">Other</option>
           </Select>
         </FormGroup>
+        
         <FormGroup>
           <Label htmlFor="message">Message</Label>
           <Textarea
@@ -183,6 +311,7 @@ const BookingPage = () => {
             required
           />
         </FormGroup>
+        
         <Button type="submit">Book Now</Button>
       </BookingForm>
     </BookingContainer>

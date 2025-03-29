@@ -1,5 +1,5 @@
 import React from 'react';
-// Remove the unused Link import that's causing the warning
+import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 
 const HeaderContainer = styled.header`
@@ -11,12 +11,11 @@ const HeaderContainer = styled.header`
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 `;
 
-const Logo = styled.div`
+const Logo = styled(Link)`
   font-size: 1.5rem;
   font-weight: bold;
   color: #333;
   text-decoration: none;
-  cursor: pointer;
 `;
 
 const Nav = styled.nav`
@@ -24,12 +23,11 @@ const Nav = styled.nav`
   gap: 1.5rem;
 `;
 
-const NavLink = styled.a`
+const NavLink = styled(Link)`
   color: #555;
   text-decoration: none;
   font-weight: 500;
   transition: color 0.3s;
-  cursor: pointer;
 
   &:hover {
     color: #0070f3;
@@ -46,7 +44,7 @@ const Header = ({ onNavigate }) => {
 
   return (
     <HeaderContainer>
-      <Logo onClick={(e) => handleClick(e, '/')}>YS</Logo>
+      <Logo to="/" onClick={(e) => handleClick(e, '/')}>YS</Logo>
       <Nav>
         <NavLink href="/#profile" onClick={(e) => handleClick(e, '/#profile')}>
           Profile
@@ -57,7 +55,7 @@ const Header = ({ onNavigate }) => {
         <NavLink href="/#experience" onClick={(e) => handleClick(e, '/#experience')}>
           Experience
         </NavLink>
-        <NavLink href="/booking" onClick={(e) => handleClick(e, '/booking')}>
+        <NavLink href="/#booking" onClick={(e) => handleClick(e, '/#booking')}>
           Book a Call
         </NavLink>
       </Nav>

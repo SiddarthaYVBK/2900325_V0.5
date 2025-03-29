@@ -1,5 +1,7 @@
 import React from 'react';
 import styled from 'styled-components';
+import profilePhoto from '../../assets/images/YerabatiSiddartha_Photo.jpg';
+import { useNavigate } from 'react-router-dom';
 
 const ProfileContainer = styled.section`
   display: flex;
@@ -8,7 +10,7 @@ const ProfileContainer = styled.section`
   padding: 3rem 1rem;
   background-color: #f0f7ff;
   text-align: center;
-
+  
   @media (min-width: 768px) {
     flex-direction: row;
     text-align: left;
@@ -60,14 +62,16 @@ const Bio = styled.p`
   margin-bottom: 1.5rem;
 `;
 
-const BookButton = styled.a`
+const BookButton = styled.button`
   display: inline-block;
   background-color: #0070f3;
   color: white;
   padding: 0.75rem 1.5rem;
   border-radius: 4px;
+  border: none;
   text-decoration: none;
   font-weight: 500;
+  cursor: pointer;
   transition: background-color 0.3s;
 
   &:hover {
@@ -76,18 +80,41 @@ const BookButton = styled.a`
 `;
 
 const ProfileSection = () => {
+  const navigate = useNavigate();
+  
+  const handleBooking = (e) => {
+    e.preventDefault();
+    try {
+      navigate('/booking');
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // Fallback - direct link if navigation fails
+      window.location.href = '/booking';
+    }
+  };
+  
   return (
-    <ProfileContainer>
+    <ProfileContainer id="profile">
       <ProfileImage>
-        <img src="https://via.placeholder.com/200" alt="Your Name" />
+        {/* Check if image exists and provide fallback */}
+        <img 
+          src={profilePhoto} 
+          alt="Yerabati Siddartha" 
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = 'https://via.placeholder.com/200?text=Photo';
+          }}
+        />
       </ProfileImage>
       <ProfileInfo>
-        <Name>Your Name</Name>
-        <Title>Your Title - Company Name</Title>
+        <Name>Yerabati Venkata Balakrishna Siddartha</Name>
+        <Title>QA Manager || Ex- Flynas</Title>
         <Bio>
-          Write a compelling bio here that highlights your expertise, experience, and what you can offer to people who book a call with you. Make it personable but professional, focusing on your strengths and the value you provide.
+          Accomplished IT professional with 14+ years of experience in Software Testing, Quality Assurance, and Project Management. Expertise in developing complex testing frameworks, DevSecOps, and leading cross-functional teams across diverse industries. Proven track record of improving product quality, enhancing system reliability, and driving successful project outcomes.
         </Bio>
-        <BookButton href="/booking">Book a 1:1 Call</BookButton>
+        <BookButton onClick={handleBooking}>
+          Book a 1:1 Call
+        </BookButton>
       </ProfileInfo>
     </ProfileContainer>
   );
