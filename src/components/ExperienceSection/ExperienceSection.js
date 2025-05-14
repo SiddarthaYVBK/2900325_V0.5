@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
+import experienceData from '../../data/experience.json';
+import { FaChevronDown, FaChevronRight } from 'react-icons/fa';
 
 const SectionContainer = styled.section`
   padding: 3rem 1rem;
@@ -44,6 +46,28 @@ const TimelineItem = styled.div`
   }
 `;
 
+const TimeMarker = styled.div`
+  position: absolute;
+  left: -160px;
+  top: 0;
+  width: 140px;
+  text-align: right;
+  font-size: 0.85rem;
+  color: #777;
+  
+  @media (max-width: 768px) {
+    display: none;
+  }
+`;
+
+const JobHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+`;
+
 const JobTitle = styled.h3`
   font-size: 1.25rem;
   margin-bottom: 0.25rem;
@@ -60,80 +84,94 @@ const Duration = styled.p`
   font-size: 0.9rem;
   color: #777;
   margin-bottom: 1rem;
+  
+  @media (min-width: 768px) {
+    display: none; /* Hide on desktop since we show it on the left */
+  }
 `;
 
-const Description = styled.p`
-  color: #666;
-  line-height: 1.5;
+const Location = styled.p`
+  font-size: 0.9rem;
+  color: #777;
   margin-bottom: 0.5rem;
 `;
 
 const ResponsibilitiesList = styled.ul`
   padding-left: 1.25rem;
   margin-top: 0.75rem;
+  text-align: left;
 `;
 
 const ResponsibilityItem = styled.li`
   color: #666;
   line-height: 1.5;
   margin-bottom: 0.5rem;
+  text-align: left;
+`;
+
+const ChevronIcon = styled.span`
+  margin-left: 10px;
+  display: flex;
+  align-items: center;
+`;
+
+const ExpandableContent = styled.div`
+  max-height: ${({ isExpanded }) => (isExpanded ? '1000px' : '0')};
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out;
+  opacity: ${({ isExpanded }) => (isExpanded ? '1' : '0')};
+  transition: opacity 0.3s ease-in-out, max-height 0.3s ease-in-out;
 `;
 
 const ExperienceSection = () => {
-  const experiences = [
-    {
-      title: "Senior QA Engineer",
-      company: "ABC Technologies",
-      duration: "Jan 2020 - Present",
-      description: "Leading quality assurance initiatives for enterprise software products.",
-      responsibilities: [
-        "Implemented automated testing strategies that reduced regression testing time by 60%",
-        "Led a team of 5 QA professionals across multiple product lines",
-        "Collaborated with product managers to define acceptance criteria and quality metrics",
-        "Established CI/CD pipelines for continuous testing and delivery"
-      ]
-    },
-    {
-      title: "QA Lead",
-      company: "XYZ Software",
-      duration: "Mar 2017 - Dec 2019",
-      description: "Managed quality assurance processes for mobile applications.",
-      responsibilities: [
-        "Developed comprehensive test plans and test cases for iOS and Android applications",
-        "Conducted performance and security testing for financial applications",
-        "Mentored junior QA engineers and facilitated knowledge sharing sessions",
-        "Implemented test automation frameworks that increased test coverage by 40%"
-      ]
-    },
-    {
-      title: "QA Engineer",
-      company: "Tech Solutions Inc.",
-      duration: "Jun 2014 - Feb 2017",
-      description: "Performed testing for web-based SaaS applications.",
-      responsibilities: [
-        "Executed manual and automated tests for web applications",
-        "Identified and documented software defects in tracking systems",
-        "Participated in agile ceremonies and provided testing estimates",
-        "Collaborated with developers to ensure quality standards were met"
-      ]
-    }
-  ];
-
+  // State to track which items are expanded
+  const [expandedItems, setExpandedItems] = useState({});
+  
+  // Toggle expansion for a specific item
+  const toggleExpansion = (index) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+  
+  // Validation
+  if (!experienceData || !Array.isArray(experienceData) || experienceData.length === 0) {
+    console.error('Experience data is missing or invalid');
+    return (
+      <SectionContainer id="experience">
+        <SectionTitle>Experience</SectionTitle>
+        <p>Experience information is currently unavailable.</p>
+      </SectionContainer>
+    );
+  }
+  
   return (
     <SectionContainer id="experience">
       <SectionTitle>Experience</SectionTitle>
       <Timeline>
-        {experiences.map((exp, index) => (
+        {experienceData.map((exp, index) => (
           <TimelineItem key={index}>
-            <JobTitle>{exp.title}</JobTitle>
-            <Company>{exp.company}</Company>
-            <Duration>{exp.duration}</Duration>
-            <Description>{exp.description}</Description>
-            <ResponsibilitiesList>
-              {exp.responsibilities.map((resp, i) => (
-                <ResponsibilityItem key={i}>{resp}</ResponsibilityItem>
-              ))}
-            </ResponsibilitiesList>
+            <TimeMarker>{exp.Duration}</TimeMarker>
+            <JobHeader onClick={() => toggleExpansion(index)}>
+              <div>
+                <JobTitle>{exp.Role}</JobTitle>
+              </div>
+              <ChevronIcon>
+                {expandedItems[index] ? <FaChevronDown /> : <FaChevronRight />}
+              </ChevronIcon>
+            </JobHeader>
+            
+            <ExpandableContent isExpanded={expandedItems[index] || false}>
+              <Company>{exp.Company}</Company>
+              {exp.Location && <Location>{exp.Location}</Location>}
+              <Duration>{exp.Duration}</Duration>
+              <ResponsibilitiesList>
+                {exp.Responsibilities && exp.Responsibilities.map((resp, i) => (
+                  <ResponsibilityItem key={i}>{resp}</ResponsibilityItem>
+                ))}
+              </ResponsibilitiesList>
+            </ExpandableContent>
           </TimelineItem>
         ))}
       </Timeline>

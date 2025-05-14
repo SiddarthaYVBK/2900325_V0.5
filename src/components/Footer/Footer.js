@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { FaLinkedin, FaGithub, FaTwitter, FaEnvelope } from 'react-icons/fa';
+import { FaLinkedin, FaGithub} from 'react-icons/fa';
 
 const FooterContainer = styled.footer`
   padding: 2rem;
@@ -35,17 +35,11 @@ const Footer = () => {
   return (
     <FooterContainer>
       <SocialLinks>
-        <SocialIcon href="https://linkedin.com/in/yourprofile" target="_blank">
+        <SocialIcon href="https://www.linkedin.com/in/siddarthayerabati/" target="_blank">
           <FaLinkedin />
         </SocialIcon>
-        <SocialIcon href="https://github.com/yourusername" target="_blank">
+        <SocialIcon href="https://github.com/SiddarthaYVBK" target="_blank">
           <FaGithub />
-        </SocialIcon>
-        <SocialIcon href="https://twitter.com/yourhandle" target="_blank">
-          <FaTwitter />
-        </SocialIcon>
-        <SocialIcon href="mailto:your.email@example.com">
-          <FaEnvelope />
         </SocialIcon>
       </SocialLinks>
       <Copyright>© {new Date().getFullYear()} Your Name. All rights reserved.</Copyright>

@@ -1,0 +1,66 @@
+[
+  {
+    "Role": "QA Manager (Head of QA)",
+    "Company": "Flynas",
+    "Location": "Riyadh",
+    "Duration": "Jan 2024 – Dec 2024",
+    "Responsibilities": [
+      "Spearheaded QA digital transformation for a major aviation player, improving system reliability by 12.5% and optimizing release cadence.",
+      "Established agile testing practices across multiple release streams, improving cross-team collaboration in SAFe PI Planning.",
+      "Led implementation of Application Performance Observability (New Relic), reducing post-production incidents and enhancing release quality.",
+      "Streamlined defect triage and test cadences across Agile Release Trains, ensuring synchronized release cycles"
+    ]
+  },
+  {
+    "Role": "Project Manager, Managed Services",
+    "Company": "MTX IT Consulting Services Pvt. Ltd.",
+    "Location": "Hyderabad",
+    "Duration": "Mar 2023 – Dec 2023",
+    "Responsibilities": [
+      "Delivered 18 Agile Salesforce projects, improving sprint velocity and on-time delivery by embedding CI/CD pipelines (Jenkins, GitHub Actions).",
+      "Maintained 99.9% SLA adherence, overseeing post-deployment support and reducing production hotfixes through improved release validation.",
+      "Provided executive-level insights via utilization and performance dashboards, driving data-driven continuous improvement.",
+      "Supported a $225M program alongside PMO, contributing to agile governance, P&L tracking, and release risk management."
+    ]
+  },
+  {
+    "Role": "Senior Consultant - QA",
+    "Company": "MTX IT Consulting Services Pvt. Ltd.",
+    "Location": "Hyderabad",
+    "Duration": "Feb 2021 – Mar 2023",
+    "Responsibilities": [
+      "Led Agile QA teams for enterprise Salesforce implementations, boosting CSAT by 15% through improved release predictability and quality gates.",
+      "Designed and executed risk-based testing strategies, ensuring stable, high-quality deployments in complex multi-cloud environments.",
+      "Partnered with product owners and Scrum teams to refine acceptance criteria and optimize Definition of Done (DoD)."
+    ]
+  },
+  {
+    "Role": "Project Lead",
+    "Company": "Cigniti Technologies",
+    "Duration": "Mar 2019 – Feb 2021",
+    "Responsibilities": [
+      "Directed a 23-member agile team, revamping regression suites to reduce test cycle time by 45% and accelerate release readiness.",
+      "Drove agile process improvements, including sprint-based test automation planning and early defect detection, reducing rework by 20%.",
+      "Fully owned invoicing and P&L for a $125M QA program while coordinating test activities across multiple releases."
+    ]
+  },
+  {
+    "Role": "Team Lead",
+    "Company": "Cigniti Technologies",
+    "Duration": "Sep 2016 – Mar 2019",
+    "Responsibilities": [
+      "Revamped regression suites for high-risk modules, improving test execution cycle time by 45%.",
+      "QA audits and process standardization initiatives across teams, strengthening governance and assurance practices."
+    ]
+  },
+  {
+    "Role": "Senior Quality Consultant",
+    "Company": "Cigniti Technologies",
+    "Duration": "Feb 2011 – Aug 2014",
+    "Responsibilities": [
+      "Implemented automated testing frameworks.",
+      "Guided Juniors on Internal Audits and contributed towards CMMi L5 SVC appraisal for multiple projects.",
+       "Guided junior team members and contributed to CMMi L5 SVC appraisal."
+    ]
+  }
+]

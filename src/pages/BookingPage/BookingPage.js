@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useFormContext } from '../../context/FormContext';
 import { useNavigation } from '../../context/NavigationContext';
+import { useRef } from 'react';
+import debounce from 'lodash.debounce';
 
 const BookingContainer = styled.div`
   max-width: 800px;
@@ -109,9 +111,21 @@ const BookingPage = () => {
   const navigationContext = useNavigation();
   
   // Safely destructure context values with fallbacks
-  const isDirty = formContext?.isDirty || localIsDirty;
-  const setIsDirty = formContext?.setIsDirty || setLocalIsDirty;
-  const setFormIsDirty = navigationContext?.setFormIsDirty || (() => {});
+// Use useMemo to stabilize these values across renders
+const isDirty = useMemo(() => 
+  formContext?.isDirty || localIsDirty, 
+  [formContext?.isDirty, localIsDirty]
+);
+
+const setIsDirty = useMemo(() => 
+  formContext?.setIsDirty || setLocalIsDirty, 
+  [formContext?.setIsDirty, setLocalIsDirty]
+);
+
+const setFormIsDirty = useMemo(() => 
+  navigationContext?.setFormIsDirty || (() => {}), 
+  [navigationContext?.setFormIsDirty]
+);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -122,6 +136,59 @@ const BookingPage = () => {
     message: '',
     sessionDuration: '30', // Default to 30 minutes
   });
+
+  // Create debounced function for saving to localStorage
+const saveFormData = useRef(
+  debounce((data) => {
+    // Only save if there's actual data
+    if (Object.values(data).some(value => value !== '')) {
+      try {
+        localStorage.setItem('bookingFormData', JSON.stringify(data));
+      } catch (err) {
+        console.error('Error saving form data to localStorage:', err);
+      }
+    }
+  }, 1000)
+).current;
+
+// Load saved form data on initial render
+const initialLoadDone = useRef(false);
+
+useEffect(() => {
+  // Skip if already loaded once
+  if (initialLoadDone.current) return;
+  initialLoadDone.current = true;
+
+  try {
+    const savedFormData = localStorage.getItem('bookingFormData');
+    
+    if (savedFormData) {
+      const parsedData = JSON.parse(savedFormData);
+      setFormData(parsedData);
+      
+      // Mark form as dirty if there's saved data
+      setLocalIsDirty(true);
+      
+      // Safely update context state
+      if (typeof setIsDirty === 'function') setIsDirty(true);
+      if (typeof setFormIsDirty === 'function') setFormIsDirty(true);
+    }
+  } catch (error) {
+    console.error('Error loading saved form data:', error);
+  }
+}, [setIsDirty, setFormIsDirty]);
+
+// Save form data when it changes
+useEffect(() => {
+  // Use the debounced save function
+  saveFormData(formData);
+  
+  // Clean up debounce on unmount
+  return () => {
+    saveFormData.cancel();
+  };
+}, [formData, saveFormData]);
+
 
   // Handle browser tab close/refresh warnings
   useEffect(() => {
@@ -157,14 +224,18 @@ const BookingPage = () => {
     e.preventDefault();
     console.log('Booking submitted:', formData);
     
-    // Reset both context states safely
+    // Reset form state
     setLocalIsDirty(false);
     
+    // Safely update context state
+    if (typeof setIsDirty === 'function') setIsDirty(false);
+    if (typeof setFormIsDirty === 'function') setFormIsDirty(false);
+    
+    // Clear saved form data
     try {
-      if (setIsDirty) setIsDirty(false);
-      if (setFormIsDirty) setFormIsDirty(false);
+      localStorage.removeItem('bookingFormData');
     } catch (err) {
-      console.error('Error resetting form state:', err);
+      console.error('Error removing form data from localStorage:', err);
     }
     
     navigate('/thank-you');

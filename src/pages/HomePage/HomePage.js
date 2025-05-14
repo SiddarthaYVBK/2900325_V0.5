@@ -3,7 +3,8 @@ import React from 'react';
 import ProfileSection from '../../components/ProfileSection/ProfileSection';
 import SkillsSection from '../../components/SkillsSection/SkillsSection';
 import ExperienceSection from '../../components/ExperienceSection/ExperienceSection';
-import BookingSection from '../../components/BookingSection/BookingSection';
+import TestimonialsSection from '../../components/TestimonialsSection/TestimonialsSection';
+
 
 const HomePage = () => {
   return (
@@ -11,7 +12,7 @@ const HomePage = () => {
       <ProfileSection />
       <SkillsSection />
       <ExperienceSection />
-      <BookingSection />
+      <TestimonialsSection />
     </>
   );
 };

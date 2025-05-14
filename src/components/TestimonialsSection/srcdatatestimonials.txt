@@ -1,0 +1,30 @@
+// src/data/testimonials.json
+[
+  {
+    "name": "Jane Smith",
+    "title": "Senior Engineering Manager at TechCorp",
+    "image": "", 
+    "testimonial": "Siddartha's expertise in QA and test automation transformed our development process. His strategic approach helped us reduce production issues by 40% while speeding up our release cycle.",
+    "relationship": "Client",
+    "date": "March 2023",
+    "source": "LinkedIn"
+  },
+  {
+    "name": "John Doe",
+    "title": "CTO at StartupX",
+    "image": "",
+    "testimonial": "Working with Siddartha on our CI/CD implementation was a game-changer. His depth of knowledge and ability to translate complex concepts into actionable strategies was invaluable for our team.",
+    "relationship": "Colleague",
+    "date": "November 2022",
+    "source": "LinkedIn"
+  },
+  {
+    "name": "Sarah Johnson",
+    "title": "Product Manager at Enterprise Solutions Inc.",
+    "image": "",
+    "testimonial": "After just one consulting session with Siddartha, we completely revamped our QA approach. Six months later, we've seen a 35% reduction in customer-reported bugs and significantly improved our team's workflow.",
+    "relationship": "Client",
+    "date": "January 2024",
+    "source": "Direct Feedback"
+  }
+]

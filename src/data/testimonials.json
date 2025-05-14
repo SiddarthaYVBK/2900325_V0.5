@@ -1,0 +1,30 @@
+
+[
+  {
+    "name": "Heather Shuler",
+    "title": "Director",
+    "image": "", 
+    "testimonial": "I had the pleasure of working closely with Sid during his tenure at MTX, and I wholeheartedly recommend him for his exceptional expertise in DevOps, QA, and Leadership. Sid is a true professional, demonstrating a deep understanding of the intricacies of DevOps and Quality processes and methodologies. His technical proficiency and strategic approach were invaluable in optimizing our development pipelines, automation, quality control and enhancing overall efficiency. His ability to seamlessly integrate quality assurance practices into the development lifecycle significantly contributed to the delivery of high-quality software solutions.In addition to their technical prowess,Sid exhibited remarkable leadership and management skills. As a team lead, he fostered a collaborative and innovative work environment.His communication skills are exemplary, ensuring that team members were well-informed and aligned with project goals.Sid played a pivotal role in mentoring team members, further enhancing the overall skill set and knowledge base of the entire team.One of Sid's standout qualities is his knack for problem-solving and his proactive approach to challenges. He consistently delivered results beyond expectations, and his commitment to continuous improvement was evident.Sid is not just a technical expert but also a dedicated and reliable team player. His positive attitude, adaptability, and commitment to delivering high-quality results make him an asset to any organization.",
+    "relationship": "Reporting Manager",
+    "date": "Dec 26 2023",
+    "source": "LinkedIn"
+  },
+  {
+    "name": "Don Harpel",
+    "title": "Project Manager",
+    "image": "",
+    "testimonial": "Sid was the test lead on a successful major transformation project that included software from 5 vendors that needed to be integrated and tested. Sid did a super job. He is detailed oriented and also sees the overall big picture. He worked well across all the vendors and was proactive in all communications. I highly recommend Sid and look forward to a chance to work with him again.",
+    "relationship": "Client",
+    "date": "Jun 8 2021",
+    "source": "LinkedIn"
+  },
+  {
+    "name": "John Halloran",
+    "title": "Ass Director, Commercial Data Management",
+    "image": "",
+    "testimonial": "Sid was great to work with during our Veeva CRM and other IT related integrations at Endo Pharmaceuticals. Sid was reliable and inquisitive, good characteristics to have for our testing needs as we were able to lean on him to uncover potential issues and pressure test system functionalities and dependencies. Sid is organized, friendly, and professional and someone I would certainly work with in the future.",
+    "relationship": "Client",
+    "date": "Jun 2 2021",
+    "source": "LinkedIn"
+  }
+]
