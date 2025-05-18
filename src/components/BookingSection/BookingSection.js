@@ -52,9 +52,8 @@ const BookingSection = () => {
       <SectionContent>
         <SectionTitle>Book a 1:1 Call</SectionTitle>
         <SectionDescription>
-          Looking for guidance on quality assurance, test automation, or career advice? 
-          Book a 1:1 call with me to discuss your specific challenges and goals. 
-          I'm here to help you navigate your professional journey.
+			Looking for QA, DevOps, or Observability expertise — or guidance to grow your tech career?
+			Whether you're a business seeking hands-on solutions or a learner aiming to upskill in automation, performance, or DevOps — let’s connect.
         </SectionDescription>
         <BookingButton to="/booking">Schedule a Call</BookingButton>
       </SectionContent>

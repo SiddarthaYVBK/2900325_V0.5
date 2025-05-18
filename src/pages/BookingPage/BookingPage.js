@@ -1,10 +1,9 @@
 // src/pages/BookingPage/BookingPage.js
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useFormContext } from '../../context/FormContext';
 import { useNavigation } from '../../context/NavigationContext';
-import { useRef } from 'react';
 import debounce from 'lodash.debounce';
 
 const BookingContainer = styled.div`
@@ -100,95 +99,133 @@ const Button = styled.button`
   }
 `;
 
-
 const BookingPage = () => {
   const navigate = useNavigate();
   // Add fallback for local state in case context fails
   const [localIsDirty, setLocalIsDirty] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Add loading state
+  const [services, setServices] = useState([]); // Add state for services
   
   // Add error handling for context hooks
   const formContext = useFormContext();
   const navigationContext = useNavigation();
   
-  // Safely destructure context values with fallbacks
-// Use useMemo to stabilize these values across renders
-const isDirty = useMemo(() => 
-  formContext?.isDirty || localIsDirty, 
-  [formContext?.isDirty, localIsDirty]
-);
+  // Use useMemo to stabilize these values across renders
+  const isDirty = useMemo(() => 
+    formContext?.isDirty || localIsDirty, 
+    [formContext?.isDirty, localIsDirty]
+  );
 
-const setIsDirty = useMemo(() => 
-  formContext?.setIsDirty || setLocalIsDirty, 
-  [formContext?.setIsDirty, setLocalIsDirty]
-);
+  const setIsDirty = useMemo(() => 
+    formContext?.setIsDirty || setLocalIsDirty, 
+    [formContext?.setIsDirty, setLocalIsDirty]
+  );
 
-const setFormIsDirty = useMemo(() => 
-  navigationContext?.setFormIsDirty || (() => {}), 
-  [navigationContext?.setFormIsDirty]
-);
+  const setFormIsDirty = useMemo(() => 
+    navigationContext?.setFormIsDirty || (() => {}), 
+    [navigationContext?.setFormIsDirty]
+  );
   
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+	services: '',
     date: '',
     time: '',
-    topic: '',
     message: '',
     sessionDuration: '30', // Default to 30 minutes
+    serviceId: '',         // New field for selected service
   });
 
   // Create debounced function for saving to localStorage
-const saveFormData = useRef(
-  debounce((data) => {
-    // Only save if there's actual data
-    if (Object.values(data).some(value => value !== '')) {
-      try {
-        localStorage.setItem('bookingFormData', JSON.stringify(data));
-      } catch (err) {
-        console.error('Error saving form data to localStorage:', err);
+  const saveFormData = useRef(
+    debounce((data) => {
+      // Only save if there's actual data
+      if (Object.values(data).some(value => value !== '')) {
+        try {
+          localStorage.setItem('bookingFormData', JSON.stringify(data));
+        } catch (err) {
+          console.error('Error saving form data to localStorage:', err);
+        }
       }
-    }
-  }, 1000)
-).current;
+    }, 1000)
+  ).current;
 
-// Load saved form data on initial render
-const initialLoadDone = useRef(false);
-
-useEffect(() => {
-  // Skip if already loaded once
-  if (initialLoadDone.current) return;
-  initialLoadDone.current = true;
-
-  try {
-    const savedFormData = localStorage.getItem('bookingFormData');
-    
-    if (savedFormData) {
-      const parsedData = JSON.parse(savedFormData);
-      setFormData(parsedData);
-      
-      // Mark form as dirty if there's saved data
-      setLocalIsDirty(true);
-      
-      // Safely update context state
-      if (typeof setIsDirty === 'function') setIsDirty(true);
-      if (typeof setFormIsDirty === 'function') setFormIsDirty(true);
-    }
-  } catch (error) {
-    console.error('Error loading saved form data:', error);
-  }
-}, [setIsDirty, setFormIsDirty]);
-
-// Save form data when it changes
-useEffect(() => {
-  // Use the debounced save function
-  saveFormData(formData);
+  // Load saved form data on initial render
+  const initialLoadDone = useRef(false);
   
-  // Clean up debounce on unmount
-  return () => {
-    saveFormData.cancel();
+  useEffect(() => {
+    // Skip if already loaded once
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+  
+    try {
+      const savedFormData = localStorage.getItem('bookingFormData');
+      
+      if (savedFormData) {
+        const parsedData = JSON.parse(savedFormData);
+        setFormData(parsedData);
+        
+        // Mark form as dirty if there's saved data
+        setLocalIsDirty(true);
+        
+        // Safely update context state
+        if (typeof setIsDirty === 'function') setIsDirty(true);
+        if (typeof setFormIsDirty === 'function') setFormIsDirty(true);
+      }
+    } catch (error) {
+      console.error('Error loading saved form data:', error);
+    }
+  }, [setIsDirty, setFormIsDirty]);
+  
+  // Save form data when it changes
+  useEffect(() => {
+    // Use the debounced save function
+    saveFormData(formData);
+    
+    // Clean up debounce on unmount
+    return () => {
+      saveFormData.cancel();
+    };
+  }, [formData, saveFormData]);
+  
+  // Fetch services from backend - only run once on mount
+useEffect(() => {
+  const fetchServices = async () => {
+    try {
+      console.log('Fetching services...');
+      const response = await fetch('http://localhost:5000/api/services');
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch services: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Services data:', data);
+      
+      if (data.success && data.services) {
+        console.log(`Found ${data.services.length} services`);
+        setServices(data.services);
+        
+        // Set default service if available and none selected
+        if (data.services.length > 0 && !formData.serviceId) {
+          setFormData(prev => ({
+            ...prev,
+            serviceId: data.services[0].service_id.toString()
+          }));
+        }
+      } else {
+        console.error('Invalid data format:', data);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    }
   };
-}, [formData, saveFormData]);
-
+  
+  fetchServices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // Empty dependency array with ESLint disable comment
 
   // Handle browser tab close/refresh warnings
   useEffect(() => {
@@ -220,26 +257,67 @@ useEffect(() => {
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log('Booking submitted:', formData);
+// In handleSubmit function in BookingPage.js
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsSubmitting(true);
+
+  try {
+    // Format services data as expected by the server
+    const services = [{
+      serviceId: formData.serviceId,
+      quantity: 1
+    }];
+
+    // Send booking data to the backend
+    const response = await fetch('http://localhost:5000/api/bookings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: formData.name,
+        email: formData.email,
+        date: formData.date,
+        time: formData.time,
+        timezone: 'Asia/Kolkata', // IST timezone
+        topic: formData.topic,
+        message: formData.message,
+        services: services,
+        // No need to send sessionDuration as it's hardcoded on server
+      }),
+    });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to submit booking');
+      }
+      
+      console.log('Booking submitted:', data);
     
-    // Reset form state
-    setLocalIsDirty(false);
-    
-    // Safely update context state
-    if (typeof setIsDirty === 'function') setIsDirty(false);
-    if (typeof setFormIsDirty === 'function') setFormIsDirty(false);
-    
-    // Clear saved form data
-    try {
-      localStorage.removeItem('bookingFormData');
-    } catch (err) {
-      console.error('Error removing form data from localStorage:', err);
-    }
-    
-    navigate('/thank-you');
-  };
+      // Reset form state
+      setLocalIsDirty(false);
+      
+      // Safely update context state
+      if (typeof setIsDirty === 'function') setIsDirty(false);
+      if (typeof setFormIsDirty === 'function') setFormIsDirty(false);
+      
+      // Clear saved form data
+      try {
+        localStorage.removeItem('bookingFormData');
+      } catch (err) {
+        console.error('Error removing form data from localStorage:', err);
+      }
+      
+      // Navigate to thank you page
+      navigate('/thank-you');
+    }   catch (error) {
+        // Error handling...
+    }   finally {
+        setIsSubmitting(false);
+  }
+};
 
   const generateTimeSlots = useMemo(() => {
     if (!formData.date) return [];
@@ -302,7 +380,7 @@ useEffect(() => {
             required
           />
         </FormGroup>
-        
+
         <FormGroup>
           <Label htmlFor="date">Preferred Date</Label>
           <Input
@@ -367,10 +445,30 @@ useEffect(() => {
             <option value="Test Automation">Test Automation</option>
             <option value="CI/CD Implementation">CI/CD Implementation</option>
             <option value="Agile Methodologies">Agile Methodologies</option>
+            <option value="Mock Interviews">Mock Interviews</option>
             <option value="Other">Other</option>
           </Select>
         </FormGroup>
         
+		{/* Add service selection */}
+        <FormGroup>
+          <Label htmlFor="serviceId">Services</Label>
+          <Select
+            id="serviceId"
+            name="serviceId"
+            value={formData.serviceId}
+            onChange={handleChange}
+            required
+          >
+            <option value="">Select a service</option>
+            {services.map(service => (
+              <option key={service.service_id} value={service.service_id}>
+                {service.service_name} (${service.default_price})
+              </option>
+            ))}
+          </Select>
+        </FormGroup>
+		
         <FormGroup>
           <Label htmlFor="message">Message</Label>
           <Textarea
@@ -383,10 +481,11 @@ useEffect(() => {
           />
         </FormGroup>
         
-        <Button type="submit">Book Now</Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Submitting...' : 'Book Now'}
+        </Button>
       </BookingForm>
     </BookingContainer>
   );
 };
-
 export default BookingPage;

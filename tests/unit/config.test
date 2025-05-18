@@ -1,0 +1,37 @@
+            const config = require('../../config'); // Adjust path if needed
+
+            describe('Configuration File Validation', () => {
+              it('should load the config file without errors', () => {
+                expect(() => require('../../config')).not.toThrow();
+              });
+
+              it('should have the correct structure and data types', () => {
+                expect(config).toHaveProperty('database');
+                expect(config).toHaveProperty('server');
+                expect(config).toHaveProperty('PUBLIC_URL');
+
+                expect(config.database).toHaveProperty('user');
+                expect(config.database).toHaveProperty('host');
+                expect(config.database).toHaveProperty('database');
+                expect(config.database).toHaveProperty('password');
+                expect(config.database).toHaveProperty('port');
+
+                expect(config.server).toHaveProperty('port');
+
+                expect(typeof config.database.user).toBe('string');
+                expect(typeof config.database.host).toBe('string');
+                expect(typeof config.database.database).toBe('string');
+                expect(typeof config.database.password).toBe('string');
+                expect(typeof config.database.port).toBe('number');
+                expect(typeof config.server.port).toBe('number');
+                expect(typeof config.PUBLIC_URL).toBe('string');
+              });
+
+              it('should have sane configuration values', () => {
+                expect(config.database.host).toBeTruthy();
+                expect(config.database.port).toBeGreaterThan(0);
+                expect(config.server.port).toBeGreaterThan(0);
+                expect(config.PUBLIC_URL).toBeDefined();
+              });
+            });
+            
