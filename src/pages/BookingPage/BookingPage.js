@@ -1,11 +1,129 @@
 // src/pages/BookingPage/BookingPage.js
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useFormContext } from '../../context/FormContext';
 import { useNavigation } from '../../context/NavigationContext';
 import debounce from 'lodash.debounce';
 
+// API base URL - can be overridden by environment variables
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+const USE_MOCK_DATA = process.env.REACT_APP_USE_MOCK_DATA === 'true';
+
+/**
+ * API client functions
+ */
+const api = {
+  /**
+   * Fetches services from the API
+   * @returns {Promise<Array>} List of services
+   */
+  getServices: async () => {
+    if (USE_MOCK_DATA) {
+      // Return mock data
+      return [
+        { service_id: "1", service_name: "Test Consulting", default_price: 100 },
+        { service_id: "2", service_name: "Mentorship", default_price: 80 }
+      ];
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/services`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch services: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data.success && data.services ? data.services : [];
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Submits a booking to the API
+   * @param {Object} bookingData - Booking information
+   * @returns {Promise<Object>} Booking confirmation
+   */
+  createBooking: async (bookingData) => {
+    if (USE_MOCK_DATA) {
+      // Simulate API call with delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      return { success: true, message: "Booking created successfully" };
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookingData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to submit booking: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error submitting booking:', error);
+      throw error;
+    }
+  }
+};
+
+// Reusable form components
+const FormField = ({ label, id, name, value, onChange, type = "text", error, children, ...props }) => (
+  <FormGroup>
+    <Label htmlFor={id}>{label}</Label>
+    {children || (
+      <Input 
+        type={type} 
+        id={id} 
+        name={name} 
+        value={value} 
+        onChange={onChange} 
+        className={error ? 'error' : ''} 
+        {...props} 
+      />
+    )}
+    {error && <ErrorMessage>{error}</ErrorMessage>}
+  </FormGroup>
+);
+
+const SelectField = ({ label, id, name, value, onChange, error, children, ...props }) => (
+  <FormField label={label} id={id} name={name} error={error}>
+    <Select 
+      id={id} 
+      name={name} 
+      value={value} 
+      onChange={onChange} 
+      className={error ? 'error' : ''} 
+      {...props}
+    >
+      {children}
+    </Select>
+  </FormField>
+);
+
+const TextareaField = ({ label, id, name, value, onChange, error, ...props }) => (
+  <FormField label={label} id={id} name={name} error={error}>
+    <Textarea 
+      id={id} 
+      name={name} 
+      value={value} 
+      onChange={onChange} 
+      className={error ? 'error' : ''} 
+      {...props} 
+    />
+  </FormField>
+);
+
+// Style definitions
 const BookingContainer = styled.div`
   max-width: 800px;
   margin: 0 auto;
@@ -50,6 +168,10 @@ const Input = styled.input`
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  
+  &.error {
+    border-color: #e53935;
+  }
 `;
 
 const Select = styled.select`
@@ -60,6 +182,10 @@ const Select = styled.select`
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  
+  &.error {
+    border-color: #e53935;
+  }
 `;
 
 const Textarea = styled.textarea`
@@ -71,8 +197,11 @@ const Textarea = styled.textarea`
   max-width: 100%;
   box-sizing: border-box;
   min-height: 100px;
-  max-height: 100px;
   resize: vertical;
+  
+  &.error {
+    border-color: #e53935;
+  }
 `;
 
 const TimezoneInfo = styled.div`
@@ -92,145 +221,199 @@ const Button = styled.button`
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.3s;
-  align-self: flex-start; /* Left align the button */
+  align-self: flex-start;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background-color: #0051cc;
+  }
+  
+  &:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
   }
 `;
 
+const ErrorMessage = styled.div`
+  color: #e53935;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+`;
+
+const FormStatus = styled.div`
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-weight: 500;
+  background-color: ${props => props.isError ? '#ffebee' : '#e8f5e9'};
+  color: ${props => props.isError ? '#c62828' : '#2e7d32'};
+  display: ${props => props.visible ? 'block' : 'none'};
+`;
+
+// Service-topic relationship mapping
+const serviceTopicsMap = {
+  "Test Consulting": [
+    "End to End Test Partner",
+    "Test Automation Web",
+    "Test Automation Mobile",
+    "Performance Testing",
+    "DevOps implementation",
+    "Observability"
+  ],
+  "Mentorship": [
+    "Agile Project Management",
+    "Test Automation of Web & Mobile",
+    "Performance Testing",
+    "Leadership & Management",
+    "DevOps",
+    "Mock Interview"
+  ]
+};
+
+/**
+ * BookingPage Component
+ * 
+ * A form that allows users to book a 1:1 call, with validation and service-specific topics.
+ */
 const BookingPage = () => {
   const navigate = useNavigate();
-  // Add fallback for local state in case context fails
   const [localIsDirty, setLocalIsDirty] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Add loading state
-  const [services, setServices] = useState([]); // Add state for services
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [services, setServices] = useState([]);
+  const [statusMessage, setStatusMessage] = useState({ message: '', isError: false });
   
-  // Add error handling for context hooks
+  // Form validation errors
+  const [errors, setErrors] = useState({});
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    services: '',
+    date: '',
+    time: '',
+    message: '',
+    sessionDuration: '30',
+    serviceId: '',
+    topic: '',
+  });
+
+  // Access context hooks safely
   const formContext = useFormContext();
   const navigationContext = useNavigation();
   
-  // Use useMemo to stabilize these values across renders
+  // Context fallbacks for safety
   const isDirty = useMemo(() => 
     formContext?.isDirty || localIsDirty, 
     [formContext?.isDirty, localIsDirty]
   );
 
-  const setIsDirty = useMemo(() => 
-    formContext?.setIsDirty || setLocalIsDirty, 
-    [formContext?.setIsDirty, setLocalIsDirty]
-  );
+  const setIsDirty = useCallback((value) => {
+    setLocalIsDirty(value);
+    if (formContext?.setIsDirty) formContext.setIsDirty(value);
+  }, [formContext]);
 
-  const setFormIsDirty = useMemo(() => 
-    navigationContext?.setFormIsDirty || (() => {}), 
-    [navigationContext?.setFormIsDirty]
-  );
-  
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-	services: '',
-    date: '',
-    time: '',
-    message: '',
-    sessionDuration: '30', // Default to 30 minutes
-    serviceId: '',         // New field for selected service
-  });
+  const setFormIsDirty = useCallback((value) => {
+    if (navigationContext?.setFormIsDirty) navigationContext.setFormIsDirty(value);
+  }, [navigationContext]);
 
   // Create debounced function for saving to localStorage
-  const saveFormData = useRef(
+  const saveFormData = useMemo(() => 
     debounce((data) => {
-      // Only save if there's actual data
       if (Object.values(data).some(value => value !== '')) {
         try {
           localStorage.setItem('bookingFormData', JSON.stringify(data));
+          console.log('Form data saved to localStorage');
         } catch (err) {
           console.error('Error saving form data to localStorage:', err);
         }
       }
-    }, 1000)
-  ).current;
+    }, 1000), 
+    []
+  );
 
-  // Load saved form data on initial render
-  const initialLoadDone = useRef(false);
-  
-  useEffect(() => {
-    // Skip if already loaded once
-    if (initialLoadDone.current) return;
-    initialLoadDone.current = true;
-  
-    try {
-      const savedFormData = localStorage.getItem('bookingFormData');
-      
-      if (savedFormData) {
-        const parsedData = JSON.parse(savedFormData);
-        setFormData(parsedData);
-        
-        // Mark form as dirty if there's saved data
-        setLocalIsDirty(true);
-        
-        // Safely update context state
-        if (typeof setIsDirty === 'function') setIsDirty(true);
-        if (typeof setFormIsDirty === 'function') setFormIsDirty(true);
-      }
-    } catch (error) {
-      console.error('Error loading saved form data:', error);
+  // Get selected service name
+  const selectedService = useMemo(() => 
+    services.find(s => s.service_id.toString() === formData.serviceId), 
+    [services, formData.serviceId]
+  );
+
+  // Get available topics based on service selection
+  const availableTopics = useMemo(() => {
+    const serviceName = selectedService?.service_name;
+    return serviceName ? serviceTopicsMap[serviceName] || [] : [];
+  }, [selectedService]);
+
+  // Handle form changes with validation
+  const handleChange = useCallback((e) => {
+    const { name, value } = e.target;
+    
+    // Clear error when field is edited
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: null }));
     }
+
+    // Special handling for serviceId changes
+    if (name === 'serviceId') {
+      // Reset topic when service changes
+      setFormData(prev => ({ ...prev, [name]: value, topic: '' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    
+    // Mark form as dirty
+    setIsDirty(true);
+    setFormIsDirty(true);
+    
+    // Log the change
+    console.log(`Field "${name}" changed to "${value}"`);
+  }, [errors, setIsDirty, setFormIsDirty]);
+
+  // Initial load - fetch services and load saved form data
+  useEffect(() => {
+    const initialLoad = async () => {
+      // Load saved form data
+      try {
+        const savedFormData = localStorage.getItem('bookingFormData');
+        
+        if (savedFormData) {
+          const parsedData = JSON.parse(savedFormData);
+          setFormData(parsedData);
+          setIsDirty(true);
+          setFormIsDirty(true);
+          console.log('Loaded saved form data from localStorage');
+        }
+      } catch (error) {
+        console.error('Error loading saved form data:', error);
+      }
+      
+      // Fetch services
+      try {
+        console.log('Fetching services...');
+        const servicesData = await api.getServices();
+        setServices(servicesData);
+        console.log('Services loaded:', servicesData);
+      } catch (error) {
+        console.error('Error fetching services:', error);
+        setStatusMessage({
+          message: 'Failed to load services. Please try again later.',
+          isError: true
+        });
+      }
+    };
+    
+    initialLoad();
   }, [setIsDirty, setFormIsDirty]);
-  
+
   // Save form data when it changes
   useEffect(() => {
-    // Use the debounced save function
     saveFormData(formData);
-    
-    // Clean up debounce on unmount
-    return () => {
-      saveFormData.cancel();
-    };
+    return () => saveFormData.cancel();
   }, [formData, saveFormData]);
-  
-  // Fetch services from backend - only run once on mount
-useEffect(() => {
-  const fetchServices = async () => {
-    try {
-      console.log('Fetching services...');
-      const response = await fetch('http://localhost:5000/api/services');
-      console.log('Response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch services: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('Services data:', data);
-      
-      if (data.success && data.services) {
-        console.log(`Found ${data.services.length} services`);
-        setServices(data.services);
-        
-        // Set default service if available and none selected
-        if (data.services.length > 0 && !formData.serviceId) {
-          setFormData(prev => ({
-            ...prev,
-            serviceId: data.services[0].service_id.toString()
-          }));
-        }
-      } else {
-        console.error('Invalid data format:', data);
-      }
-    } catch (error) {
-      console.error('Error fetching services:', error);
-    }
-  };
-  
-  fetchServices();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);  // Empty dependency array with ESLint disable comment
 
-  // Handle browser tab close/refresh warnings
+  // Browser tab close/refresh warnings
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (isDirty || localIsDirty) {
+      if (isDirty) {
         const message = "You have unsaved changes. Are you sure you want to leave?";
         e.preventDefault();
         e.returnValue = message;
@@ -240,100 +423,54 @@ useEffect(() => {
     
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty, localIsDirty]);
+  }, [isDirty]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+  // Form validation
+  const validateForm = useCallback(() => {
+    const newErrors = {};
     
-    // Set both context states safely
-    setLocalIsDirty(true);
-    
-    try {
-      if (setIsDirty) setIsDirty(true);
-      if (setFormIsDirty) setFormIsDirty(true);
-    } catch (err) {
-      console.error('Error updating form state:', err);
-    }
-  };
-
-// In handleSubmit function in BookingPage.js
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-
-  try {
-    // Format services data as expected by the server
-    const services = [{
-      serviceId: formData.serviceId,
-      quantity: 1
-    }];
-
-    // Send booking data to the backend
-    const response = await fetch('http://localhost:5000/api/bookings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: formData.name,
-        email: formData.email,
-        date: formData.date,
-        time: formData.time,
-        timezone: 'Asia/Kolkata', // IST timezone
-        topic: formData.topic,
-        message: formData.message,
-        services: services,
-        // No need to send sessionDuration as it's hardcoded on server
-      }),
+    // Required fields validation
+    const requiredFields = ['name', 'email', 'date', 'time', 'topic', 'serviceId', 'message'];
+    requiredFields.forEach(field => {
+      if (!formData[field]) {
+        newErrors[field] = 'This field is required';
+      }
     });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to submit booking');
-      }
-      
-      console.log('Booking submitted:', data);
     
-      // Reset form state
-      setLocalIsDirty(false);
-      
-      // Safely update context state
-      if (typeof setIsDirty === 'function') setIsDirty(false);
-      if (typeof setFormIsDirty === 'function') setFormIsDirty(false);
-      
-      // Clear saved form data
-      try {
-        localStorage.removeItem('bookingFormData');
-      } catch (err) {
-        console.error('Error removing form data from localStorage:', err);
-      }
-      
-      // Navigate to thank you page
-      navigate('/thank-you');
-    }   catch (error) {
-        // Error handling...
-    }   finally {
-        setIsSubmitting(false);
-  }
-};
+    // Email validation
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+    
+    // Date validation - must be today or future
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDate = new Date(formData.date);
+    if (formData.date && selectedDate < today) {
+      newErrors.date = 'Please select today or a future date';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [formData]);
 
+  // Time slots generation
   const generateTimeSlots = useMemo(() => {
     if (!formData.date) return [];
 
     const now = new Date();
     const selectedDate = new Date(formData.date);
-    selectedDate.setHours(0, 0, 0, 0); // Normalize to midnight
+    selectedDate.setHours(0, 0, 0, 0);
+    const isToday = selectedDate.toDateString() === now.toDateString();
 
     const timeSlots = [];
     let startTime = new Date(selectedDate);
-    startTime.setHours(9, 0, 0, 0); // Start at 9:00 AM IST
+    startTime.setHours(9, 0, 0, 0); // Start at 9:00 AM
 
     const endTime = new Date(selectedDate);
-    endTime.setHours(20, 0, 0, 0); // End at 8:00 PM IST
+    endTime.setHours(20, 0, 0, 0); // End at 8:00 PM
 
-    const duration = parseInt(formData.sessionDuration, 10); // Get duration in minutes
+    const duration = parseInt(formData.sessionDuration, 10);
 
     while (startTime <= endTime) {
       const timeString = startTime.toLocaleTimeString('en-US', {
@@ -341,48 +478,131 @@ const handleSubmit = async (e) => {
         minute: '2-digit',
       });
 
-      // Disable past times
-      if (selectedDate.toDateString() === now.toDateString() && startTime < now) {
-        timeSlots.push({ value: timeString, disabled: true });
-      } else {
-        timeSlots.push({ value: timeString, disabled: false });
-      }
+      // Disable past times if today
+      const disabled = isToday && startTime < now;
+      timeSlots.push({ value: timeString, disabled });
 
       startTime.setMinutes(startTime.getMinutes() + duration);
     }
+    
     return timeSlots;
   }, [formData.date, formData.sessionDuration]);
+
+  // Form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    console.log('Form submission initiated');
+    
+    // Validate form
+    if (!validateForm()) {
+      console.log('Form validation failed', errors);
+      setStatusMessage({
+        message: 'Please fix the errors in the form.',
+        isError: true
+      });
+      return;
+    }
+    
+    setIsSubmitting(true);
+    setStatusMessage({ message: '', isError: false });
+
+    try {
+      console.log('Preparing booking data for submission');
+      
+      // Format services data as expected by the server
+      const services = [{
+        serviceId: formData.serviceId,
+        quantity: 1
+      }];
+
+	const bookingData = {
+		  name: formData.name,                // Maps to customer_name
+		  email: formData.email,              // Maps to customer_email
+		  date: formData.date,                // Used to create the booking_utc timestamp
+		  time: formData.time,                // Maps to start_time_ist
+		  topic: formData.topic,              // Maps to booking_subject
+		  message: formData.message,          // Maps to notes
+		  sessionDuration: formData.sessionDuration, // Used to calculate end_time_ist
+		  services: [{
+			serviceId: formData.serviceId,
+			quantity: 1
+  }]
+};
+      
+      // Submit the booking
+      const result = await api.createBooking(bookingData);
+      console.log('Booking submitted successfully:', result);
+      
+      // Reset form state
+      setIsDirty(false);
+      setFormIsDirty(false);
+      
+      // Clear saved form data
+      try {
+        localStorage.removeItem('bookingFormData');
+        console.log('Form data cleared from localStorage');
+      } catch (err) {
+        console.error('Error removing form data from localStorage:', err);
+      }
+      
+      // Navigate to thank you page
+      navigate('/thank-you');
+    } catch (error) {
+      console.error('Error submitting booking:', error);
+      setStatusMessage({
+        message: `Failed to submit booking: ${error.message}`,
+        isError: true
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <BookingContainer>
       <PageTitle>Book a 1:1 Call</PageTitle>
+      
+      {/* Status messages */}
+      <FormStatus 
+        visible={!!statusMessage.message} 
+        isError={statusMessage.isError}
+      >
+        {statusMessage.message}
+      </FormStatus>
+      
       <BookingForm onSubmit={handleSubmit}>
-        <FormGroup>
-          <Label htmlFor="name">Name</Label>
-          <Input
-            type="text"
-            id="name"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-          />
-        </FormGroup>
+        <FormField
+          label="Name"
+          id="name"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          required
+          error={errors.name}
+        />
         
-        <FormGroup>
-          <Label htmlFor="email">Email</Label>
-          <Input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-          />
-        </FormGroup>
+        <FormField
+          label="Email"
+          id="email"
+          name="email"
+          type="email"
+          value={formData.email}
+          onChange={handleChange}
+          required
+          error={errors.email}
+        />
 
-        <FormGroup>
-          <Label htmlFor="date">Preferred Date</Label>
+        <FormField
+          label="Preferred Date"
+          id="date"
+          name="date"
+          type="date"
+          value={formData.date}
+          onChange={handleChange}
+          min={new Date().toISOString().split('T')[0]}
+          required
+          error={errors.date}
+        >
           <Input
             type="date"
             id="date"
@@ -391,95 +611,86 @@ const handleSubmit = async (e) => {
             onChange={handleChange}
             min={new Date().toISOString().split('T')[0]}
             required
+            className={errors.date ? 'error' : ''}
           />
           <TimezoneInfo>
             All times are in Indian Standard Time (IST) - UTC+5:30
           </TimezoneInfo>
-        </FormGroup>
+        </FormField>
         
-        <FormGroup>
-          <Label htmlFor="sessionDuration">Session Duration</Label>
-          <Select
-            id="sessionDuration"
-            name="sessionDuration"
-            value={formData.sessionDuration}
-            onChange={handleChange}
-            required
-          >
-            <option value="30">30 minutes</option>
-            <option value="60">1 hour</option>
-          </Select>
-        </FormGroup>
+        <SelectField
+          label="Session Duration"
+          id="sessionDuration"
+          name="sessionDuration"
+          value={formData.sessionDuration}
+          onChange={handleChange}
+          required
+        >
+          <option value="30">30 minutes</option>
+          <option value="60">1 hour</option>
+        </SelectField>
         
-        <FormGroup>
-          <Label htmlFor="time">Preferred Time</Label>
-          <Select
-            id="time"
-            name="time"
-            value={formData.time}
-            onChange={handleChange}
-            required
-            disabled={!formData.date}
-          >
-            <option value="">Select a time slot</option>
-            {generateTimeSlots.map((slot) => (
-              <option key={slot.value} value={slot.value} disabled={slot.disabled}>
-                {slot.value}
-              </option>
-            ))}
-          </Select>
-        </FormGroup>
+        <SelectField
+          label="Preferred Time"
+          id="time"
+          name="time"
+          value={formData.time}
+          onChange={handleChange}
+          required
+          disabled={!formData.date}
+          error={errors.time}
+        >
+          <option value="">Select a time slot</option>
+          {generateTimeSlots.map((slot, index) => (
+            <option key={index} value={slot.value} disabled={slot.disabled}>
+              {slot.value}
+            </option>
+          ))}
+        </SelectField>
         
-        <FormGroup>
-          <Label htmlFor="topic">Topic</Label>
-          <Select
-            id="topic"
-            name="topic"
-            value={formData.topic}
-            onChange={handleChange}
-            required
-          >
-            <option value="">Select a topic</option>
-            <option value="Career Advice">Career Advice</option>
-            <option value="QA Best Practices">QA Best Practices</option>
-            <option value="Test Automation">Test Automation</option>
-            <option value="CI/CD Implementation">CI/CD Implementation</option>
-            <option value="Agile Methodologies">Agile Methodologies</option>
-            <option value="Mock Interviews">Mock Interviews</option>
-            <option value="Other">Other</option>
-          </Select>
-        </FormGroup>
+        <SelectField
+          label="Services"
+          id="serviceId"
+          name="serviceId"
+          value={formData.serviceId}
+          onChange={handleChange}
+          required
+          error={errors.serviceId}
+        >
+          <option value="">Select a service</option>
+          {services.map(service => (
+            <option key={service.service_id} value={service.service_id}>
+              {service.service_name} (${service.default_price})
+            </option>
+          ))}
+        </SelectField>
         
-		{/* Add service selection */}
-        <FormGroup>
-          <Label htmlFor="serviceId">Services</Label>
-          <Select
-            id="serviceId"
-            name="serviceId"
-            value={formData.serviceId}
-            onChange={handleChange}
-            required
-          >
-            <option value="">Select a service</option>
-            {services.map(service => (
-              <option key={service.service_id} value={service.service_id}>
-                {service.service_name} (${service.default_price})
-              </option>
-            ))}
-          </Select>
-        </FormGroup>
-		
-        <FormGroup>
-          <Label htmlFor="message">Message</Label>
-          <Textarea
-            id="message"
-            name="message"
-            value={formData.message}
-            onChange={handleChange}
-            placeholder="Please share what you'd like to discuss during our call."
-            required
-          />
-        </FormGroup>
+        <SelectField
+          label="Topic"
+          id="topic"
+          name="topic"
+          value={formData.topic}
+          onChange={handleChange}
+          required
+          disabled={!formData.serviceId || availableTopics.length === 0}
+          error={errors.topic}
+        >
+          <option value="">Select a topic</option>
+          {availableTopics.map((topic, index) => (
+            <option key={index} value={topic}>{topic}</option>
+          ))}
+        </SelectField>
+        
+        <TextareaField
+          label="Message"
+          id="message"
+          name="message"
+          value={formData.message}
+          onChange={handleChange}
+          placeholder="Please share what you'd like to discuss during our call."
+          required
+          error={errors.message}
+        />
         
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Submitting...' : 'Book Now'}
@@ -488,4 +699,5 @@ const handleSubmit = async (e) => {
     </BookingContainer>
   );
 };
+
 export default BookingPage;

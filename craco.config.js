@@ -12,7 +12,7 @@ module.exports = {
       if (babelLoader) {
         babelLoader.options.sourceType = 'module';
       }
-      
+
       return webpackConfig;
     }
   }
