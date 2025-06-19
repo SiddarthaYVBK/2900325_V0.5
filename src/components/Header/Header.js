@@ -1,6 +1,7 @@
+// src/components/Header/Header.js
 import React from 'react';
-// Remove the unused Link import that's causing the warning
 import styled from 'styled-components';
+import { useNavigate } from 'react-router-dom';
 
 const HeaderContainer = styled.header`
   display: flex;
@@ -36,28 +37,25 @@ const NavLink = styled.a`
   }
 `;
 
-const Header = ({ onNavigate }) => {
-  const handleClick = (e, path) => {
-    if (onNavigate) {
-      e.preventDefault();
-      onNavigate(path);
-    }
+const Header = () => {
+  const navigate = useNavigate();
+
+  const handleLogoClick = () => {
+    navigate('/');
+  };
+
+  const handleNavClick = (path) => {
+    navigate(path);
   };
 
   return (
     <HeaderContainer>
-      <Logo onClick={(e) => handleClick(e, '/')}>YS</Logo>
+      <Logo onClick={handleLogoClick}>YS</Logo>
       <Nav>
-        <NavLink href="/#profile" onClick={(e) => handleClick(e, '/#profile')}>
-          Profile
+        <NavLink onClick={() => handleNavClick('/blog')}>
+          Blog
         </NavLink>
-        <NavLink href="/#skills" onClick={(e) => handleClick(e, '/#skills')}>
-          Skills
-        </NavLink>
-        <NavLink href="/#experience" onClick={(e) => handleClick(e, '/#experience')}>
-          Experience
-        </NavLink>
-        <NavLink href="/booking" onClick={(e) => handleClick(e, '/booking')}>
+        <NavLink onClick={() => handleNavClick('/booking')}>
           Book a Call
         </NavLink>
       </Nav>
