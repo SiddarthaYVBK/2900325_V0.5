@@ -44,8 +44,8 @@ pipeline
 
                     def uniqueNamePart = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 8)
 
-                    // Use a heredoc to write the Terraform content to main.tf
-                    // This ensures correct multi-line HCL formatting.
+                    // This is the corrected way to write the multi-line Terraform content
+                    // to main.tf using a heredoc.
                     sh """
                         cat > terraform_test/main.tf <<EOF
 resource "aws_s3_bucket" "example_bucket" {
