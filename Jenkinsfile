@@ -44,8 +44,6 @@ pipeline
 
                     def uniqueNamePart = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 8)
 
-                    // This is the corrected way to write the multi-line Terraform content
-                    // to main.tf using a heredoc.
                     sh """
                         cat > terraform_test/main.tf <<EOF
 resource "aws_s3_bucket" "example_bucket" {
@@ -58,7 +56,7 @@ EOF
                     """
 
                     withCredentials([aws(credentialsId: 'aws-jenkins-automation-user', vars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'])]) {
-                        withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) {
+                        withEnv(["AWS_DEFAULT_REGION=ap-south-1", "TF_LOG=TRACE"]) { // ADDED TF_LOG=TRACE here
                             sh 'cd terraform_test && terraform init'
                             sh 'cd terraform_test && terraform plan -out=tfplan'
                         }
