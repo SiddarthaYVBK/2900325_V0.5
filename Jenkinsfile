@@ -37,17 +37,21 @@ pipeline
             }
         }
 
-        stage('Dummy Terraform Plan (Optional)') {
-            steps {
-                script {
+        stage('Dummy Terraform Plan (Optional)') 
+		{
+            steps 
+			{
+                script 
+				{
                     sh 'mkdir -p terraform_test'
-                    // Corrected line for creating main.tf:
-                    // The outer double quotes allow Groovy to interpolate ${UUID.randomUUID()...}
-                    // Inner double quotes for bucket name are escaped with backslashes \"
-                    sh "echo 'resource \"aws_s3_bucket\" \"example_bucket\" { bucket = \"your-unique-jenkins-test-bucket-name-${UUID.randomUUID().toString().replaceAll(\"-\", \"\").substring(0, 8)}\" tags = { Name = \"JenkinsTestBucket\" } }' > terraform_test/main.tf"
+                    def uniqueNamePart = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 8)
+					
+                    sh "echo 'resource \"aws_s3_bucket\" \"example_bucket\" { bucket = \"your-unique-jenkins-test-bucket-name-${uniqueNamePart}\" tags = { Name = \"JenkinsTestBucket\" } }' > terraform_test/main.tf"
 
-                    withCredentials([aws(credentialsId: 'aws-jenkins-automation-user', vars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'])]) {
-                        withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) {
+                    withCredentials([aws(credentialsId: 'aws-jenkins-automation-user', vars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'])]) 
+					{
+                        withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) 
+						{
                             sh 'cd terraform_test && terraform init'
                             sh 'cd terraform_test && terraform plan -out=tfplan'
                         }
