@@ -1,4 +1,4 @@
-//Jenkinsfile for DevOps Assignment - Terraform + Ansible
+// Fixed Jenkinsfile for DevOps Assignment - Terraform + Ansible
 pipeline {
     agent any
     
@@ -26,6 +26,9 @@ pipeline {
                     withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) {
                         sh 'aws --version'
                         sh 'aws s3 ls'
+                        
+                        echo 'Checking if AnsibleController key pair exists...'
+                        sh 'aws ec2 describe-key-pairs --region ap-south-1 --query "KeyPairs[?KeyName==\'AnsibleController\'].KeyName" --output text || echo "AnsibleController key pair not found"'
                     }
                 }
                 
@@ -75,7 +78,16 @@ EOF
                         cat inventory.ini
                         
                         echo "Preparing SSH key..."
-                        sudo cp /home/ubuntu/.ssh/AnsibleController.pem /tmp/ansible_key.pem
+                        # FIXED: Use the correct SSH key path
+                        if [ -f /var/lib/jenkins/.ssh/AnsibleController.pem ]; then
+                            sudo cp /var/lib/jenkins/.ssh/AnsibleController.pem /tmp/ansible_key.pem
+                        elif [ -f /home/ubuntu/.ssh/AnsibleController.pem ]; then
+                            sudo cp /home/ubuntu/.ssh/AnsibleController.pem /tmp/ansible_key.pem
+                        else
+                            echo "AnsibleController.pem not found. Using Jenkins default key."
+                            sudo cp /var/lib/jenkins/.ssh/id_rsa /tmp/ansible_key.pem
+                        fi
+                        
                         sudo chmod 600 /tmp/ansible_key.pem
                         sudo chown jenkins:jenkins /tmp/ansible_key.pem
                         
