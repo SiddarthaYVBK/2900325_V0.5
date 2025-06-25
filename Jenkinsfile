@@ -14,12 +14,18 @@ pipeline
 
         stage('Verify Terraform and AWS CLI') 
 		{
+            environment 
+			{
+                // PATH to access AWSCLI
+                PATH = "/usr/local/bin:$PATH"
+            }
             steps 
 			{
                 // Use withCredentials to get AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
                 withCredentials([aws(credentialsId: 'aws-jenkins-automation-user', vars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'])]) 
 				{
-                    withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) {
+                    withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) 
+					{
                         sh 'terraform --version'
                         sh 'aws --version'
                         sh 'aws s3 ls' // Test AWS CLI access to S3
