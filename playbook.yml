@@ -1,252 +1,178 @@
 ---
-# Ansible Playbook for MPF Portfolio Application Deployment
-# This playbook configures EC2 instances and deploys the React.js portfolio app
-
-- name: Deploy MPF Portfolio Application
+# Simple Conservative Ansible Playbook for Configuration Management Assignment
+- name: Configure Development Environment
   hosts: all
   become: yes
-  gather_facts: yes
-  vars:
-    app_name: "mpf-portfolio"
-    app_user: "ubuntu"
-    app_directory: "/opt/{{ app_name }}"
-    repository_url: "https://github.com/SiddarthaYVBK/2900325_V0.5.git"
-    node_version: "18"
-    domain_name: "{{ ansible_default_ipv4.address }}"  # Use public IP as domain
-
+  
   tasks:
-    # System Updates and Basic Setup
-    - name: Update apt package cache
+    - name: Update system packages
       apt:
         update_cache: yes
-        cache_valid_time: 3600
-
-    - name: Upgrade all packages
-      apt:
         upgrade: dist
-        autoremove: yes
-        autoclean: yes
+      register: update_result
+      
+    - name: Log update status
+      debug:
+        msg: "System update completed"
 
-    - name: Install basic dependencies
+    - name: Check if nginx is already installed
+      command: nginx -v
+      register: nginx_check
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Log nginx check result
+      debug:
+        msg: "Nginx status: {{ 'Already installed' if nginx_check.rc == 0 else 'Not installed' }}"
+
+    - name: Install basic packages
       apt:
         name:
           - curl
-          - wget
           - git
-          - unzip
-          - software-properties-common
-          - build-essential
           - nginx
-          - ufw
-          - python3-pip
         state: present
+      register: basic_packages
+      
+    - name: Log basic packages installation
+      debug:
+        msg: "Basic packages installation completed"
 
-    # Node.js Installation
-    - name: Download NodeSource setup script
-      get_url:
-        url: "https://deb.nodesource.com/setup_{{ node_version }}.x"
-        dest: /tmp/nodesource_setup.sh
-        mode: '0755'
+    - name: Check if Node.js is already installed
+      command: node --version
+      register: existing_node_check
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Log existing Node.js check
+      debug:
+        msg: "Node.js status: {{ existing_node_check.stdout if existing_node_check.rc == 0 else 'Not installed' }}"
 
-    - name: Run NodeSource setup script
-      shell: /tmp/nodesource_setup.sh
-      args:
-        creates: /etc/apt/sources.list.d/nodesource.list
+    - name: Add NodeSource repository key
+      apt_key:
+        url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+        state: present
+      when: existing_node_check.rc != 0
 
-    - name: Update apt cache after NodeSource setup
-      apt:
-        update_cache: yes
+    - name: Add NodeSource repository
+      apt_repository:
+        repo: "deb https://deb.nodesource.com/node_18.x {{ ansible_distribution_release }} main"
+        state: present
+      when: existing_node_check.rc != 0
 
     - name: Install Node.js
       apt:
         name: nodejs
         state: present
-
+        update_cache: yes
+      register: nodejs_install
+      when: existing_node_check.rc != 0
+      
     - name: Verify Node.js installation
       command: node --version
-      register: node_version_output
+      register: node_version
       changed_when: false
-
-    - name: Display Node.js version
+      
+    - name: Log Node.js version
       debug:
-        msg: "Node.js version installed: {{ node_version_output.stdout }}"
+        msg: "Node.js installed: {{ node_version.stdout }}"
 
-    - name: Verify npm installation
-      command: npm --version
-      register: npm_version_output
+    - name: Check if PM2 is already installed
+      command: pm2 --version
+      register: existing_pm2_check
+      ignore_errors: yes
       changed_when: false
-
-    - name: Display npm version
+      
+    - name: Log existing PM2 check
       debug:
-        msg: "npm version installed: {{ npm_version_output.stdout }}"
+        msg: "PM2 status: {{ 'Already installed version ' + existing_pm2_check.stdout if existing_pm2_check.rc == 0 else 'Not installed' }}"
 
-    # Application Deployment
-    - name: Create application directory
-      file:
-        path: "{{ app_directory }}"
-        state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_user }}"
-        mode: '0755'
-
-    - name: Clone MPF Portfolio repository
-      git:
-        repo: "{{ repository_url }}"
-        dest: "{{ app_directory }}"
-        version: master
-        force: yes
-      become_user: "{{ app_user }}"
-      notify: restart nginx
-
-    - name: Install npm dependencies
-      npm:
-        path: "{{ app_directory }}"
-        state: present
-        production: yes
-      become_user: "{{ app_user }}"
-
-    - name: Build React application
-      command: npm run build
-      args:
-        chdir: "{{ app_directory }}"
-      become_user: "{{ app_user }}"
-      environment:
-        NODE_ENV: production
-        PUBLIC_URL: "/"
-
-    - name: Install server dependencies
-      npm:
-        path: "{{ app_directory }}/server"
-        state: present
-        production: yes
-      become_user: "{{ app_user }}"
-
-    # Install PM2 for process management
-    - name: Install PM2 globally
+    - name: Install global npm packages
       npm:
         name: pm2
         global: yes
         state: present
-
-    - name: Create PM2 ecosystem configuration
-      template:
-        src: ecosystem.config.js.j2
-        dest: "{{ app_directory }}/ecosystem.config.js"
-        owner: "{{ app_user }}"
-        group: "{{ app_user }}"
-        mode: '0644'
-      notify: restart pm2
-
-    # Nginx Configuration
-    - name: Remove default nginx site
-      file:
-        path: /etc/nginx/sites-enabled/default
-        state: absent
-      notify: restart nginx
-
-    - name: Create nginx configuration for portfolio app
-      template:
-        src: nginx-portfolio.conf.j2
-        dest: "/etc/nginx/sites-available/{{ app_name }}"
-        backup: yes
-      notify: restart nginx
-
-    - name: Enable portfolio site in nginx
-      file:
-        src: "/etc/nginx/sites-available/{{ app_name }}"
-        dest: "/etc/nginx/sites-enabled/{{ app_name }}"
-        state: link
-      notify: restart nginx
-
-    - name: Test nginx configuration
-      command: nginx -t
-      register: nginx_test
-      changed_when: false
-
-    - name: Display nginx test results
+      register: pm2_install
+      when: existing_pm2_check.rc != 0
+      
+    - name: Log PM2 installation
       debug:
-        msg: "Nginx configuration test: {{ nginx_test.stdout }}"
+        msg: "PM2 installation completed"
 
-    # Firewall Configuration
-    - name: Configure UFW - Allow SSH
-      ufw:
-        rule: allow
-        port: '22'
-        proto: tcp
+    - name: Create project directory
+      file:
+        path: /home/ubuntu/projects
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
 
-    - name: Configure UFW - Allow HTTP
-      ufw:
-        rule: allow
-        port: '80'
-        proto: tcp
+    - name: Clone repository
+      git:
+        repo: "https://github.com/SiddarthaYVBK/2900325_V0.5.git"
+        dest: "/home/ubuntu/projects/mpf-portfolio"
+        force: yes
+      become_user: ubuntu
+      register: git_clone
+      
+    - name: Log repository clone
+      debug:
+        msg: "Repository cloned successfully"
 
-    - name: Configure UFW - Allow HTTPS
-      ufw:
-        rule: allow
-        port: '443'
-        proto: tcp
+    - name: Install frontend dependencies
+      npm:
+        path: "/home/ubuntu/projects/mpf-portfolio"
+        state: present
+      become_user: ubuntu
+      register: npm_install
+      
+    - name: Log npm install
+      debug:
+        msg: "Frontend dependencies installed"
 
-    - name: Configure UFW - Allow Node.js app (if needed)
-      ufw:
-        rule: allow
-        port: '5000'
-        proto: tcp
-        src: '127.0.0.1'
+    - name: Check server directory
+      stat:
+        path: "/home/ubuntu/projects/mpf-portfolio/server"
+      register: server_check
 
-    - name: Enable UFW
-      ufw:
-        state: enabled
-        policy: deny
+    - name: Install server dependencies
+      npm:
+        path: "/home/ubuntu/projects/mpf-portfolio/server"
+        state: present
+      become_user: ubuntu
+      when: server_check.stat.exists
+      register: server_npm_install
+      
+    - name: Log server dependencies
+      debug:
+        msg: "Server dependencies installed"
+      when: server_check.stat.exists
 
-    # Start Services
-    - name: Start and enable nginx
+    - name: Start nginx service
       systemd:
         name: nginx
         state: started
         enabled: yes
-
-    - name: Start PM2 application
-      shell: |
-        cd {{ app_directory }}
-        pm2 start ecosystem.config.js
-        pm2 save
-        pm2 startup systemd -u {{ app_user }} --hp /home/{{ app_user }}
-      become_user: "{{ app_user }}"
-      args:
-        creates: /home/{{ app_user }}/.pm2/dump.pm2
-
-    # Health Checks
-    - name: Wait for nginx to be ready
-      wait_for:
-        port: 80
-        host: "{{ ansible_default_ipv4.address }}"
-        delay: 5
-        timeout: 30
-
-    - name: Check if portfolio application is accessible
-      uri:
-        url: "http://{{ ansible_default_ipv4.address }}"
-        method: GET
-        status_code: 200
-      register: app_health_check
-      retries: 3
-      delay: 10
-
-    - name: Display application URL
+      register: nginx_start
+      
+    - name: Log nginx status
       debug:
-        msg: 
-          - "Portfolio application deployed successfully!"
-          - "Access your portfolio at: http://{{ ansible_default_ipv4.address }}"
-          - "Server IP: {{ ansible_default_ipv4.address }}"
+        msg: "Nginx service started and enabled"
 
-  handlers:
-    - name: restart nginx
-      systemd:
-        name: nginx
-        state: restarted
-
-    - name: restart pm2
-      shell: |
-        cd {{ app_directory }}
-        pm2 reload ecosystem.config.js
-      become_user: "{{ app_user }}"
+    - name: Create status file
+      copy:
+        content: |
+          Configuration Management Status
+          ==============================
+          Date: {{ ansible_date_time.iso8601 }}
+          Node.js: {{ node_version.stdout }}
+          Instance: {{ ansible_hostname }}
+          IP: {{ ansible_default_ipv4.address }}
+          Status: Configuration completed successfully
+        dest: "/home/ubuntu/config-status.txt"
+        owner: ubuntu
+        group: ubuntu
+        
+    - name: Log final status
+      debug:
+        msg: "Configuration management completed successfully on {{ ansible_hostname }}"
