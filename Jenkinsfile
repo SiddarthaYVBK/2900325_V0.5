@@ -105,13 +105,16 @@ pipeline {
         }
         
         stage('Terraform Infrastructure') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
             steps {
                 echo 'Starting Terraform infrastructure provisioning...'
                 withCredentials([aws(credentialsId: 'aws-jenkins-automation-user', vars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'])]) {
                     withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) {
                         sh 'terraform validate'
-                        sh 'terraform plan -out=tfplan'
-                        sh 'terraform apply -auto-approve tfplan'
+                        sh 'timeout 300 terraform plan -out=tfplan'
+                        sh 'timeout 300 terraform apply -auto-approve tfplan'
                         sh 'terraform output -json > terraform_outputs.json'
                         sh 'terraform output'
                     }
