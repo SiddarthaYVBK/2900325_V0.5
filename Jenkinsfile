@@ -1,4 +1,4 @@
-// Fixed Jenkinsfile for DevOps Assignment - Terraform + Ansible
+// Jenkinsfile with AWS Resource Cleanup Verification
 pipeline {
     agent any
     
@@ -35,6 +35,44 @@ pipeline {
                 echo 'Verifying Ansible installation...'
                 sh 'ansible --version'
                 sh 'ansible all -i "localhost," -c local -m ping'
+            }
+        }
+        
+        stage('Check and Cleanup AWS Resources') {
+            steps {
+                echo 'Checking existing AWS resources...'
+                withCredentials([aws(credentialsId: 'aws-jenkins-automation-user', vars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'])]) {
+                    withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) {
+                        script {
+                            // Check if security group exists
+                            def sgExists = sh(
+                                script: 'aws ec2 describe-security-groups --region ap-south-1 --group-names ansible-sg-terraform --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "NOT_FOUND"',
+                                returnStdout: true
+                            ).trim()
+                            
+                            if (sgExists != "NOT_FOUND") {
+                                echo "Security group 'ansible-sg-terraform' exists"
+                                
+                                // Check if any instances are using it
+                                def instancesUsingGroup = sh(
+                                    script: 'aws ec2 describe-instances --region ap-south-1 --filters "Name=instance.group-name,Values=ansible-sg-terraform" --query "Reservations[*].Instances[?State.Name!=\'terminated\'][].InstanceId" --output text',
+                                    returnStdout: true
+                                ).trim()
+                                
+                                if (instancesUsingGroup == "") {
+                                    echo "No instances using the security group. Safe to delete."
+                                    sh 'aws ec2 delete-security-group --group-name ansible-sg-terraform --region ap-south-1'
+                                    echo "Security group deleted successfully"
+                                } else {
+                                    echo "WARNING: Instances are using the security group: ${instancesUsingGroup}"
+                                    echo "Will skip deletion to avoid disruption"
+                                }
+                            } else {
+                                echo "Security group does not exist. Ready to proceed."
+                            }
+                        }
+                    }
+                }
             }
         }
         
@@ -78,7 +116,7 @@ EOF
                         cat inventory.ini
                         
                         echo "Preparing SSH key..."
-                        # FIXED: Use the correct SSH key path
+                        # FIXED: Use the correct SSH key path with fallback
                         if [ -f /var/lib/jenkins/.ssh/AnsibleController.pem ]; then
                             sudo cp /var/lib/jenkins/.ssh/AnsibleController.pem /tmp/ansible_key.pem
                         elif [ -f /home/ubuntu/.ssh/AnsibleController.pem ]; then
@@ -110,9 +148,12 @@ EOF
                         CONTROLLER_IP=$(cat terraform_outputs.json | python3 -c "import sys, json; print(json.load(sys.stdin)['ansible_controller_details']['value']['public_ipv4'])")
                         WORKER_IP=$(cat terraform_outputs.json | python3 -c "import sys, json; print(json.load(sys.stdin)['ansible_worker_details']['value']['public_ipv4'])")
                         
+                        echo "=== ASSIGNMENT COMPLETED SUCCESSFULLY ==="
                         echo "Controller IP: $CONTROLLER_IP"
                         echo "Worker IP: $WORKER_IP"
-                        echo "Assignment completed successfully"
+                        echo "✅ Terraform: Infrastructure provisioned"
+                        echo "✅ Ansible: Configuration management completed"
+                        echo "✅ DevOps Pipeline: End-to-end automation working"
                     '''
                 }
             }
@@ -125,10 +166,11 @@ EOF
             sh 'rm -f tfplan /tmp/ansible_key.pem'
         }
         success {
-            echo 'Pipeline completed successfully'
+            echo '🎉 DevOps Assignment COMPLETED SUCCESSFULLY!'
+            echo 'Infrastructure + Configuration Management + CI/CD = ✅'
         }
         failure {
-            echo 'Pipeline failed'
+            echo 'Pipeline failed - check console output'
         }
     }
 }
