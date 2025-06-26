@@ -1,187 +1,117 @@
 ---
 # Simple Conservative Ansible Playbook for Configuration Management Assignment
+---
 - name: Configure Development Environment
-  hosts: all
-  become: yes
+  hosts: all # This targets all hosts defined in your inventory.ini
+  become: yes # This is crucial! Run all tasks with root privileges by default for system-wide changes.
+  become_user: root # Explicitly become the root user
 
   tasks:
-    - name: Update system packages
-      apt:
+    - name: Update system packages # Ensures the system is up-to-date
+      apt: # Uses the apt module for Debian/Ubuntu based systems
         update_cache: yes
         upgrade: dist
-      register: update_result
+      # Note: For RHEL/CentOS, you'd use 'yum' or 'dnf' module instead of 'apt'
 
     - name: Log update status
-      debug:
+      ansible.builtin.debug:
         msg: "System update completed"
 
-    - name: Check if nginx is already installed
-      command: nginx -v
-      register: nginx_check
-      ignore_errors: yes
-      changed_when: false
-
-    - name: Log nginx check result
-      debug:
-        msg: "Nginx status: {{ 'Already installed' if nginx_check.rc == 0 else 'Not installed' }}"
-
-    - name: Install basic packages
+    - name: Install common prerequisites (curl, git, build-essential)
       apt:
-        name:
-          - curl
-          - git
-          - nginx
+        name: "{{ item }}" # Loop through a list of packages
         state: present
-      register: basic_packages
-
+      loop:
+        - curl
+        - git
+        - build-essential # Essential for compiling some Node.js native modules
+        - ca-certificates # Important for secure connections
+      
     - name: Log basic packages installation
-      debug:
+      ansible.builtin.debug:
         msg: "Basic packages installation completed"
 
-    # NEW TASK TO PREFER IPV4
     - name: Configure system to prefer IPv4 over IPv6 for DNS resolution
-      become: yes
+      # This helps prevent issues with some network configurations or services that prefer IPv6 but might have issues
       lineinfile:
         path: /etc/gai.conf
-        line: 'precedence ::ffff:0:0/96 100'
-        state: present
-        create: yes
-        owner: root
-        group: root
-        mode: '0644'
+        regexp: '^#precedence ::ffff:0:0/96  100'
+        line: 'precedence ::ffff:0:0/96  100'
+        create: yes # Create the file if it doesn't exist
+      # Note: If the line exists and is uncommented, this task will report 'ok', not 'changed'.
 
-    - name: Check if Node.js is already installed
-      command: node --version
-      register: existing_node_check
-      ignore_errors: yes
-      changed_when: false
+    - name: Add NodeSource GPG key
+      # This step is required to securely add the Node.js repository
+      ansible.builtin.shell: curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/nodesource.gpg >/dev/null
+      args:
+        creates: /etc/apt/keyrings/nodesource.gpg # Only run if the key isn't already there
 
-    - name: Log existing Node.js check
-      debug:
-        msg: "Node.js status: {{ existing_node_check.stdout if existing_node_check.rc == 0 else 'Not installed' }}"
+    - name: Add NodeSource APT repository
+      # This adds the official Node.js repository for a specific version (e.g., Node.js 18.x)
+      ansible.builtin.shell: echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+      # Important: Change 'node_18.x' to your desired Node.js version (e.g., node_20.x, node_22.x)
 
-    - name: Add NodeSource repository key
-      apt_key:
-        url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-        state: present
-      when: existing_node_check.rc != 0
-
-    - name: Add NodeSource apt repository
-      apt_repository:
-        repo: 'deb https://deb.nodesource.com/node_18.x {{ ansible_distribution_release }} main'
-        state: present
-        filename: nodesource.list
-      when: existing_node_check.rc != 0
-
-    - name: Install Node.js
+    - name: Update apt cache after adding NodeSource repo
       apt:
-        name: nodejs
-        state: present
         update_cache: yes
-      when: existing_node_check.rc != 0
-      register: node_install
+
+    - name: Install Node.js and npm
+      apt:
+        name: nodejs # Installs Node.js which includes npm
+        state: present
 
     - name: Log Node.js installation
-      debug:
+      ansible.builtin.debug:
         msg: "Node.js installation completed"
-      when: existing_node_check.rc != 0
 
     - name: Get Node.js version
-      command: node --version
-      register: node_version
-      changed_when: false
+      ansible.builtin.command: node --version
+      register: node_version_output
+      changed_when: false # This command doesn't change anything, so don't report as 'changed'
 
     - name: Log Node.js version
-      debug:
-        msg: "Node.js version: {{ node_version.stdout }}"
+      ansible.builtin.debug:
+        msg: "Node.js version: {{ node_version_output.stdout }}"
 
     - name: Install pm2 globally
-      npm:
+      community.general.npm: # Using the dedicated 'npm' module is cleaner than a raw 'shell' command
         name: pm2
         global: yes
-        state: present
-      become_user: ubuntu
-      register: pm2_install
+        state: present # Ensure it's installed
+        # The 'become: yes' at the playbook level handles permissions for this task
+        # No need for specific 'sudo' commands within the npm module as 'become' handles it.
 
     - name: Log pm2 installation
-      debug:
-        msg: "pm2 installation completed"
+      ansible.builtin.debug:
+        msg: "pm2 installation completed globally"
 
-    - name: Create projects directory if it doesn't exist
-      file:
-        path: "/home/ubuntu/projects"
-        state: directory
-        owner: ubuntu
-        group: ubuntu
-        mode: '0755'
+    # Example: If you needed to install other global npm packages
+    # - name: Install another_global_package globally
+    #   community.general.npm:
+    #     name: another_global_package
+    #     global: yes
+    #     state: present
 
-    - name: Clone frontend repository
-      git:
-        repo: https://github.com/SiddarthaYVBK/mpf-portfolio-frontend.git
-        dest: "/home/ubuntu/projects/mpf-portfolio"
-        clone: yes
-        update: yes
-      become_user: ubuntu
+    # Add more tasks here for your application setup, e.g.:
+    # - name: Copy application files
+    #   ansible.builtin.copy:
+    #     src: /path/to/your/local/app
+    #     dest: /opt/your-app
+    #     mode: '0755'
+    #     owner: ubuntu # Assuming your application runs as 'ubuntu'
 
-    - name: Check frontend directory
-      stat:
-        path: "/home/ubuntu/projects/mpf-portfolio"
-      register: frontend_check
+    # - name: Install application dependencies
+    #   community.general.npm:
+    #     path: /opt/your-app
+    #     state: present # Or 'latest' for re-running npm install
+    #   become: no # Usually, app dependencies are installed as the app user, not root
+    #   become_user: ubuntu # Assuming your app user is 'ubuntu'
 
-    - name: Install frontend dependencies
-      npm:
-        path: "/home/ubuntu/projects/mpf-portfolio"
-        state: present
-      become_user: ubuntu
-      register: npm_install
-
-    - name: Log npm install
-      debug:
-        msg: "Frontend dependencies installed"
-
-    - name: Check server directory
-      stat:
-        path: "/home/ubuntu/projects/mpf-portfolio/server"
-      register: server_check
-
-    - name: Install server dependencies
-      npm:
-        path: "/home/ubuntu/projects/mpf-portfolio/server"
-        state: present
-      become_user: ubuntu
-      when: server_check.stat.exists
-      register: server_npm_install
-
-    - name: Log server dependencies
-      debug:
-        msg: "Server dependencies installed"
-      when: server_check.stat.exists
-
-    - name: Start nginx service
-      systemd:
-        name: nginx
-        state: started
-        enabled: yes
-      register: nginx_start
-
-    - name: Log nginx status
-      debug:
-        msg: "Nginx service started and enabled"
-
-    - name: Create status file
-      copy:
-        content: |
-          Configuration Management Status
-          ==============================
-          Date: {{ ansible_date_time.iso8601 }}
-          Node.js: {{ node_version.stdout }}
-          Instance: {{ ansible_hostname }}
-          IP: {{ ansible_default_ipv4.address }}
-          Status: Configuration completed successfully
-        dest: "/home/ubuntu/config-status.txt"
-        owner: ubuntu
-        group: ubuntu
-
-    - name: Log final status
-      debug:
-        msg: "Configuration management completed successfully on {{ ansible_hostname }}"
+    # - name: Start application with pm2
+    #   ansible.builtin.command: pm2 start /opt/your-app/app.js # Adjust path to your main app file
+    #   args:
+    #     chdir: /opt/your-app
+    #   # The 'pm2' command should be in the PATH due to global npm install.
+    #   # If 'pm2' still isn't found, you might need to specify the full path: /usr/bin/pm2
