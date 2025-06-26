@@ -1,4 +1,4 @@
-// Jenkinsfile with AWS Resource Cleanup Verification
+// Jenkinsfile with Terraform Import for Existing Resources
 pipeline {
     agent any
     
@@ -38,37 +38,65 @@ pipeline {
             }
         }
         
-        stage('Check and Cleanup AWS Resources') {
+        stage('Handle Existing AWS Resources') {
             steps {
-                echo 'Checking existing AWS resources...'
+                echo 'Checking and importing existing AWS resources...'
                 withCredentials([aws(credentialsId: 'aws-jenkins-automation-user', vars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'])]) {
                     withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) {
                         script {
+                            // Initialize Terraform first
+                            sh 'terraform init'
+                            
                             // Check if security group exists
-                            def sgExists = sh(
+                            def sgId = sh(
                                 script: 'aws ec2 describe-security-groups --region ap-south-1 --group-names ansible-sg-terraform --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "NOT_FOUND"',
                                 returnStdout: true
                             ).trim()
                             
-                            if (sgExists != "NOT_FOUND") {
-                                echo "Security group 'ansible-sg-terraform' exists"
+                            if (sgId != "NOT_FOUND") {
+                                echo "Security group exists with ID: ${sgId}"
                                 
-                                // Check if any instances are using it
-                                def instancesUsingGroup = sh(
-                                    script: 'aws ec2 describe-instances --region ap-south-1 --filters "Name=instance.group-name,Values=ansible-sg-terraform" --query "Reservations[*].Instances[?State.Name!=\'terminated\'][].InstanceId" --output text',
+                                // Try to import the security group
+                                try {
+                                    sh "terraform import aws_security_group.ansible_sg ${sgId}"
+                                    echo "Security group imported successfully"
+                                } catch (Exception e) {
+                                    echo "Security group already imported or import failed: ${e.getMessage()}"
+                                }
+                                
+                                // Check for existing instances and import them too
+                                def existingInstances = sh(
+                                    script: 'aws ec2 describe-instances --region ap-south-1 --filters "Name=instance.group-name,Values=ansible-sg-terraform" "Name=instance-state-name,Values=running,pending,stopping,stopped" --query "Reservations[*].Instances[*].[InstanceId,Tags[?Key==\\"Name\\"].Value|[0]]" --output text',
                                     returnStdout: true
                                 ).trim()
                                 
-                                if (instancesUsingGroup == "") {
-                                    echo "No instances using the security group. Safe to delete."
-                                    sh 'aws ec2 delete-security-group --group-name ansible-sg-terraform --region ap-south-1'
-                                    echo "Security group deleted successfully"
-                                } else {
-                                    echo "WARNING: Instances are using the security group: ${instancesUsingGroup}"
-                                    echo "Will skip deletion to avoid disruption"
+                                if (existingInstances) {
+                                    def instances = existingInstances.split('\n')
+                                    for (instanceLine in instances) {
+                                        def parts = instanceLine.split('\t')
+                                        if (parts.length >= 2) {
+                                            def instanceId = parts[0]
+                                            def instanceName = parts[1]
+                                            
+                                            echo "Found instance: ${instanceId} (${instanceName})"
+                                            
+                                            // Import instances based on their names
+                                            try {
+                                                if (instanceName == "AnsibleControllerTerraform") {
+                                                    sh "terraform import aws_instance.ansible_controller ${instanceId}"
+                                                    echo "Controller instance imported: ${instanceId}"
+                                                } else if (instanceName == "AnsibleWorkerTerraform") {
+                                                    sh "terraform import aws_instance.ansible_worker ${instanceId}"
+                                                    echo "Worker instance imported: ${instanceId}"
+                                                }
+                                            } catch (Exception e) {
+                                                echo "Instance already imported or import failed: ${e.getMessage()}"
+                                            }
+                                        }
+                                    }
                                 }
                             } else {
-                                echo "Security group does not exist. Ready to proceed."
+                                echo "No existing security group found. Will create new resources."
                             }
                         }
                     }
@@ -81,7 +109,6 @@ pipeline {
                 echo 'Starting Terraform infrastructure provisioning...'
                 withCredentials([aws(credentialsId: 'aws-jenkins-automation-user', vars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'])]) {
                     withEnv(["AWS_DEFAULT_REGION=ap-south-1"]) {
-                        sh 'terraform init'
                         sh 'terraform validate'
                         sh 'terraform plan -out=tfplan'
                         sh 'terraform apply -auto-approve tfplan'
@@ -116,7 +143,6 @@ EOF
                         cat inventory.ini
                         
                         echo "Preparing SSH key..."
-                        # FIXED: Use the correct SSH key path with fallback
                         if [ -f /var/lib/jenkins/.ssh/AnsibleController.pem ]; then
                             sudo cp /var/lib/jenkins/.ssh/AnsibleController.pem /tmp/ansible_key.pem
                         elif [ -f /home/ubuntu/.ssh/AnsibleController.pem ]; then
@@ -130,7 +156,7 @@ EOF
                         sudo chown jenkins:jenkins /tmp/ansible_key.pem
                         
                         echo "Waiting for instances to be ready..."
-                        sleep 60
+                        sleep 30
                         
                         echo "Running Ansible playbook..."
                         ansible-playbook -i inventory.ini playbook.yml
@@ -148,12 +174,13 @@ EOF
                         CONTROLLER_IP=$(cat terraform_outputs.json | python3 -c "import sys, json; print(json.load(sys.stdin)['ansible_controller_details']['value']['public_ipv4'])")
                         WORKER_IP=$(cat terraform_outputs.json | python3 -c "import sys, json; print(json.load(sys.stdin)['ansible_worker_details']['value']['public_ipv4'])")
                         
-                        echo "=== ASSIGNMENT COMPLETED SUCCESSFULLY ==="
+                        echo "=== DEVOPS ASSIGNMENT COMPLETED SUCCESSFULLY ==="
                         echo "Controller IP: $CONTROLLER_IP"
                         echo "Worker IP: $WORKER_IP"
-                        echo "✅ Terraform: Infrastructure provisioned"
+                        echo "✅ Terraform: Infrastructure managed (imported + provisioned)"
                         echo "✅ Ansible: Configuration management completed"
-                        echo "✅ DevOps Pipeline: End-to-end automation working"
+                        echo "✅ Jenkins: End-to-end CI/CD pipeline working"
+                        echo "✅ Portfolio: Real project integration successful"
                     '''
                 }
             }
@@ -166,8 +193,11 @@ EOF
             sh 'rm -f tfplan /tmp/ansible_key.pem'
         }
         success {
-            echo '🎉 DevOps Assignment COMPLETED SUCCESSFULLY!'
-            echo 'Infrastructure + Configuration Management + CI/CD = ✅'
+            echo '🎉 DEVOPS ASSIGNMENT COMPLETED SUCCESSFULLY!'
+            echo '✅ Infrastructure as Code (Terraform)'
+            echo '✅ Configuration Management (Ansible)'
+            echo '✅ CI/CD Pipeline (Jenkins)'
+            echo '✅ Real Application Integration (MPF Portfolio)'
         }
         failure {
             echo 'Pipeline failed - check console output'
