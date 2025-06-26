@@ -1,0 +1,178 @@
+---
+# Simple Conservative Ansible Playbook for Configuration Management Assignment
+- name: Configure Development Environment
+  hosts: all
+  become: yes
+  
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+      register: update_result
+      
+    - name: Log update status
+      debug:
+        msg: "System update completed"
+
+    - name: Check if nginx is already installed
+      command: nginx -v
+      register: nginx_check
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Log nginx check result
+      debug:
+        msg: "Nginx status: {{ 'Already installed' if nginx_check.rc == 0 else 'Not installed' }}"
+
+    - name: Install basic packages
+      apt:
+        name:
+          - curl
+          - git
+          - nginx
+        state: present
+      register: basic_packages
+      
+    - name: Log basic packages installation
+      debug:
+        msg: "Basic packages installation completed"
+
+    - name: Check if Node.js is already installed
+      command: node --version
+      register: existing_node_check
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Log existing Node.js check
+      debug:
+        msg: "Node.js status: {{ existing_node_check.stdout if existing_node_check.rc == 0 else 'Not installed' }}"
+
+    - name: Add NodeSource repository key
+      apt_key:
+        url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+        state: present
+      when: existing_node_check.rc != 0
+
+    - name: Add NodeSource repository
+      apt_repository:
+        repo: "deb https://deb.nodesource.com/node_18.x {{ ansible_distribution_release }} main"
+        state: present
+      when: existing_node_check.rc != 0
+
+    - name: Install Node.js
+      apt:
+        name: nodejs
+        state: present
+        update_cache: yes
+      register: nodejs_install
+      when: existing_node_check.rc != 0
+      
+    - name: Verify Node.js installation
+      command: node --version
+      register: node_version
+      changed_when: false
+      
+    - name: Log Node.js version
+      debug:
+        msg: "Node.js installed: {{ node_version.stdout }}"
+
+    - name: Check if PM2 is already installed
+      command: pm2 --version
+      register: existing_pm2_check
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Log existing PM2 check
+      debug:
+        msg: "PM2 status: {{ 'Already installed version ' + existing_pm2_check.stdout if existing_pm2_check.rc == 0 else 'Not installed' }}"
+
+    - name: Install global npm packages
+      npm:
+        name: pm2
+        global: yes
+        state: present
+      register: pm2_install
+      when: existing_pm2_check.rc != 0
+      
+    - name: Log PM2 installation
+      debug:
+        msg: "PM2 installation completed"
+
+    - name: Create project directory
+      file:
+        path: /home/ubuntu/projects
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Clone repository
+      git:
+        repo: "https://github.com/SiddarthaYVBK/2900325_V0.5.git"
+        dest: "/home/ubuntu/projects/mpf-portfolio"
+        force: yes
+      become_user: ubuntu
+      register: git_clone
+      
+    - name: Log repository clone
+      debug:
+        msg: "Repository cloned successfully"
+
+    - name: Install frontend dependencies
+      npm:
+        path: "/home/ubuntu/projects/mpf-portfolio"
+        state: present
+      become_user: ubuntu
+      register: npm_install
+      
+    - name: Log npm install
+      debug:
+        msg: "Frontend dependencies installed"
+
+    - name: Check server directory
+      stat:
+        path: "/home/ubuntu/projects/mpf-portfolio/server"
+      register: server_check
+
+    - name: Install server dependencies
+      npm:
+        path: "/home/ubuntu/projects/mpf-portfolio/server"
+        state: present
+      become_user: ubuntu
+      when: server_check.stat.exists
+      register: server_npm_install
+      
+    - name: Log server dependencies
+      debug:
+        msg: "Server dependencies installed"
+      when: server_check.stat.exists
+
+    - name: Start nginx service
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+      register: nginx_start
+      
+    - name: Log nginx status
+      debug:
+        msg: "Nginx service started and enabled"
+
+    - name: Create status file
+      copy:
+        content: |
+          Configuration Management Status
+          ==============================
+          Date: {{ ansible_date_time.iso8601 }}
+          Node.js: {{ node_version.stdout }}
+          Instance: {{ ansible_hostname }}
+          IP: {{ ansible_default_ipv4.address }}
+          Status: Configuration completed successfully
+        dest: "/home/ubuntu/config-status.txt"
+        owner: ubuntu
+        group: ubuntu
+        
+    - name: Log final status
+      debug:
+        msg: "Configuration management completed successfully on {{ ansible_hostname }}"
