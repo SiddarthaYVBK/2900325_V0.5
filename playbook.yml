@@ -3,14 +3,14 @@
 - name: Configure Development Environment
   hosts: all
   become: yes
-  
+
   tasks:
     - name: Update system packages
       apt:
         update_cache: yes
         upgrade: dist
       register: update_result
-      
+
     - name: Log update status
       debug:
         msg: "System update completed"
@@ -20,7 +20,7 @@
       register: nginx_check
       ignore_errors: yes
       changed_when: false
-      
+
     - name: Log nginx check result
       debug:
         msg: "Nginx status: {{ 'Already installed' if nginx_check.rc == 0 else 'Not installed' }}"
@@ -33,17 +33,29 @@
           - nginx
         state: present
       register: basic_packages
-      
+
     - name: Log basic packages installation
       debug:
         msg: "Basic packages installation completed"
+
+    # NEW TASK TO PREFER IPV4
+    - name: Configure system to prefer IPv4 over IPv6 for DNS resolution
+      become: yes
+      lineinfile:
+        path: /etc/gai.conf
+        line: 'precedence ::ffff:0:0/96 100'
+        state: present
+        create: yes
+        owner: root
+        group: root
+        mode: '0644'
 
     - name: Check if Node.js is already installed
       command: node --version
       register: existing_node_check
       ignore_errors: yes
       changed_when: false
-      
+
     - name: Log existing Node.js check
       debug:
         msg: "Node.js status: {{ existing_node_check.stdout if existing_node_check.rc == 0 else 'Not installed' }}"
@@ -54,10 +66,11 @@
         state: present
       when: existing_node_check.rc != 0
 
-    - name: Add NodeSource repository
+    - name: Add NodeSource apt repository
       apt_repository:
-        repo: "deb https://deb.nodesource.com/node_18.x {{ ansible_distribution_release }} main"
+        repo: 'deb https://deb.nodesource.com/node_18.x {{ ansible_distribution_release }} main'
         state: present
+        filename: nodesource.list
       when: existing_node_check.rc != 0
 
     - name: Install Node.js
@@ -65,59 +78,55 @@
         name: nodejs
         state: present
         update_cache: yes
-      register: nodejs_install
       when: existing_node_check.rc != 0
-      
-    - name: Verify Node.js installation
+      register: node_install
+
+    - name: Log Node.js installation
+      debug:
+        msg: "Node.js installation completed"
+      when: existing_node_check.rc != 0
+
+    - name: Get Node.js version
       command: node --version
       register: node_version
       changed_when: false
-      
+
     - name: Log Node.js version
       debug:
-        msg: "Node.js installed: {{ node_version.stdout }}"
+        msg: "Node.js version: {{ node_version.stdout }}"
 
-    - name: Check if PM2 is already installed
-      command: pm2 --version
-      register: existing_pm2_check
-      ignore_errors: yes
-      changed_when: false
-      
-    - name: Log existing PM2 check
-      debug:
-        msg: "PM2 status: {{ 'Already installed version ' + existing_pm2_check.stdout if existing_pm2_check.rc == 0 else 'Not installed' }}"
-
-    - name: Install global npm packages
+    - name: Install pm2 globally
       npm:
         name: pm2
         global: yes
         state: present
+      become_user: ubuntu
       register: pm2_install
-      when: existing_pm2_check.rc != 0
-      
-    - name: Log PM2 installation
-      debug:
-        msg: "PM2 installation completed"
 
-    - name: Create project directory
+    - name: Log pm2 installation
+      debug:
+        msg: "pm2 installation completed"
+
+    - name: Create projects directory if it doesn't exist
       file:
-        path: /home/ubuntu/projects
+        path: "/home/ubuntu/projects"
         state: directory
         owner: ubuntu
         group: ubuntu
         mode: '0755'
 
-    - name: Clone repository
+    - name: Clone frontend repository
       git:
-        repo: "https://github.com/SiddarthaYVBK/2900325_V0.5.git"
+        repo: https://github.com/SiddarthaYVBK/mpf-portfolio-frontend.git
         dest: "/home/ubuntu/projects/mpf-portfolio"
-        force: yes
+        clone: yes
+        update: yes
       become_user: ubuntu
-      register: git_clone
-      
-    - name: Log repository clone
-      debug:
-        msg: "Repository cloned successfully"
+
+    - name: Check frontend directory
+      stat:
+        path: "/home/ubuntu/projects/mpf-portfolio"
+      register: frontend_check
 
     - name: Install frontend dependencies
       npm:
@@ -125,7 +134,7 @@
         state: present
       become_user: ubuntu
       register: npm_install
-      
+
     - name: Log npm install
       debug:
         msg: "Frontend dependencies installed"
@@ -142,7 +151,7 @@
       become_user: ubuntu
       when: server_check.stat.exists
       register: server_npm_install
-      
+
     - name: Log server dependencies
       debug:
         msg: "Server dependencies installed"
@@ -154,7 +163,7 @@
         state: started
         enabled: yes
       register: nginx_start
-      
+
     - name: Log nginx status
       debug:
         msg: "Nginx service started and enabled"
@@ -172,7 +181,7 @@
         dest: "/home/ubuntu/config-status.txt"
         owner: ubuntu
         group: ubuntu
-        
+
     - name: Log final status
       debug:
         msg: "Configuration management completed successfully on {{ ansible_hostname }}"
