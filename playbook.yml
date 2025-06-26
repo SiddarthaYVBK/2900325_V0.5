@@ -1,6 +1,6 @@
 ---
 # Simple Conservative Ansible Playbook for Configuration Management Assignment
----
+
 - name: Configure Development Environment
   hosts: all # This targets all hosts defined in your inventory.ini
   become: yes # This is crucial! Run all tasks with root privileges by default for system-wide changes.
